@@ -520,7 +520,7 @@ std::string am::Disassembler::Disassemble()
 
 			case CodeType::displacement_optional:
 			{
-				int16_t displacement = int8_t(instruction & 0b0000'0000'1111'1111);
+				int16_t displacement = int8_t(instruction & 0b00000000'11111111);
 				uint32_t target = pc;
 				if (displacement == 0)
 				{
@@ -552,9 +552,15 @@ std::string am::Disassembler::Disassemble()
 			{
 				// Note : register list is always read from the saved PC after the initial instruction word.
 				const auto regMask = m_memory->GetWord(savedPc);
-				const auto count = sprintf_s(buffptr, charsLeft, "$%04hx", regMask);
-				buffptr += count;
-				charsLeft -= count;
+				bool reversed = false;
+				if (!(instruction & 0b00000100'00000000) && ((instruction & 0b00000000'00111000) == 0b00000000'00100000))
+				{
+					reversed = true;
+				}
+				WriteRegisterList(regMask, reversed, buffptr, charsLeft);
+				//const auto count = sprintf_s(buffptr, charsLeft, "$%04hx", regMask);
+				//buffptr += count;
+				//charsLeft -= count;
 			}	break;
 
 			}
@@ -710,4 +716,76 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 
 	buffptr += count;
 	charsLeft -= count;
+}
+
+void am::Disassembler::WriteRegisterList(uint16_t mask, bool isReversed, char*& buffptr, int& charsLeft)
+{
+	if (isReversed)
+	{
+		mask = ((mask & 0xff00) >> 8) | ((mask & 0x00ff) << 8);
+		mask = ((mask & 0xf0f0) >> 4) | ((mask & 0x0f0f) << 4);
+		mask = ((mask & 0xcccc) >> 2) | ((mask & 0x3333) << 2);
+		mask = ((mask & 0xaaaa) >> 1) | ((mask & 0x5555) << 1);
+	}
+
+	bool firstRange = true;
+
+	auto WriteRegisterRange = [&](char r, int first, int last)
+	{
+		int count = 0;
+
+		if (!firstRange)
+		{
+			if (charsLeft)
+			{
+				*buffptr++ = '/';
+				charsLeft--;
+			}
+		}
+		else
+		{
+			firstRange = false;
+		}
+
+		if (first == last)
+		{
+			count = sprintf_s(buffptr, charsLeft, "%c%d", r, first);
+		}
+		else
+		{
+			count = sprintf_s(buffptr, charsLeft, "%c%d-%c%d", r, first, r, last);
+		}
+		buffptr += count;
+		charsLeft -= count;
+	};
+
+	static constexpr char regLetters[] = { 'D', 'A' };
+	uint16_t currentBitMask = 0x0001;
+
+	for(int g = 0; g < 2; g++)
+	{
+		int runStart = -1;
+		for (int i = 0; i < 8; i++)
+		{
+			if (mask & currentBitMask)
+			{
+				if (runStart == -1)
+				{
+					runStart = i;
+				}
+			}
+			else if (runStart != -1)
+			{
+				WriteRegisterRange(regLetters[g], runStart, i - 1);
+				runStart = -1;
+			}
+
+			currentBitMask <<= 1;
+		}
+
+		if (runStart != -1)
+		{
+			WriteRegisterRange(regLetters[g], runStart, 7);
+		}
+	}
 }

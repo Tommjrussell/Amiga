@@ -22,6 +22,7 @@ namespace am
 	private:
 		uint32_t GetImmediateValue(int size);
 		void WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft);
+		void WriteRegisterList(uint16_t mask, bool isReversed, char*& buffptr, int& charsLeft);
 
 	public:
 		uint32_t pc = 0;

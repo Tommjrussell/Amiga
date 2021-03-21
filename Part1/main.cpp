@@ -56,6 +56,10 @@ int main()
 		0x4880,				// ext.w D0
 		0x4e75,				// rts
 		0x6632,				// bne 50 -> $00000040
+		0x4cd7, 0x55f0,
+		0x4cd5, 0xaaaa,
+		0x48d5, 0xaaaa,
+		0x4895, 0xffff
 	};
 
 	am::Disassembler d(&m);
