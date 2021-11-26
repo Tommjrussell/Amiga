@@ -8,4 +8,5 @@ set(CMAKE_CXX_STANDARD 17)
 project ("Amiga")
 
 # Include sub-projects.
-add_subdirectory ("Part1")
+add_subdirectory ("DisassemblerTest")
+add_subdirectory ("Emulator")

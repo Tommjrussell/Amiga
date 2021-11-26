@@ -1,0 +1,27 @@
+# ninja log v5
+43	1136	6528891211117087	Part1/CMakeFiles/AmigaEmuPart1.dir/disassembler.cpp.obj	f13821691eec4fbf
+59	1092	6528891210667336	Part2/CMakeFiles/AmigaEmuPart2.dir/emuapp.cpp.obj	7277ea9ab704fbbd
+1247	5957	6536900331485363	Part2/AmigaEmuPart2.exe	2a64caff32a63118
+1	878	6535296797658083	Part2/CMakeFiles/AmigaEmuPart2.dir/disassembler.cpp.obj	3a49f28387e14ffa
+61	1420	6528891213925474	Part2/CMakeFiles/AmigaEmuPart2.dir/platform_glfw.cpp.obj	8160ac7ba349fd6a
+50	1122	6528891210707314	Part1/CMakeFiles/AmigaEmuPart1.dir/main.cpp.obj	dda01d3539f9f77
+1	1490	6534081725414725	Part2/CMakeFiles/AmigaEmuPart2.dir/main.cpp.obj	466b85d7e2324d03
+1137	2728	6528891217903200	Part1/AmigaEmuPart1.exe	3e6c4c78f75a4702
+3	513	6593090128605730	build.ninja	8a3afafef96c76a
+1	385	6535298972632141	Part2/CMakeFiles/AmigaEmuPart2.dir/App.cpp.obj	22968d0c576e437f
+7	1062	6530603274284967	Part2/CMakeFiles/AmigaEmuPart2.dir/RunGlfw.cpp.obj	9ab5f100e6b1f466
+14	998	6531405551446141	Part2/CMakeFiles/AmigaEmuPart2.dir/util/file.cpp.obj	726da3bd275a2681
+5	1152	6531472381834451	Part2/CMakeFiles/AmigaEmuPart2.dir/GlfwPlatform/shader.cpp.obj	6ec697bd3c4ffcf6
+54	1247	6536900313817179	Part2/CMakeFiles/AmigaEmuPart2.dir/GlfwPlatform/RunGlfw.cpp.obj	9110d39f8db7caaf
+1	402	6535300907586501	Part2/CMakeFiles/AmigaEmuPart2.dir/debugger.cpp.obj	c75d740e82c5f9ef
+39	1637	6596456913888418	Emulator/CMakeFiles/AmigaEmulator.dir/App.cpp.obj	90f7366d3e2661e
+23	1653	6596456913938396	Emulator/CMakeFiles/AmigaEmulator.dir/disassembler.cpp.obj	27f31ef001b24049
+51	1659	6596456914078313	Emulator/CMakeFiles/AmigaEmulator.dir/util/file.cpp.obj	99bb4e897d475dd1
+48	2070	6596456918365859	Emulator/CMakeFiles/AmigaEmulator.dir/GlfwPlatform/shader.cpp.obj	d96b2987d3233356
+32	2145	6596456919155400	Emulator/CMakeFiles/AmigaEmulator.dir/GlfwPlatform/RunGlfw.cpp.obj	1825322ce3c33dd5
+1638	2259	6596456920304745	Emulator/CMakeFiles/AmigaEmulator.dir/debugger.cpp.obj	1ee60d35de2c909e
+44	2664	6596456924332170	Emulator/CMakeFiles/AmigaEmulator.dir/main.cpp.obj	54afed8c0b136994
+2664	5378	6596456936050051	Emulator/AmigaEmulator.exe	d85b2e3f89f7fb46
+1	827	6596466730879826	DisassemblerTest/CMakeFiles/DisassemblerTest.dir/disassembler.cpp.obj	c45988d89eda3dff
+4	872	6596466731359549	DisassemblerTest/CMakeFiles/DisassemblerTest.dir/main.cpp.obj	113237e401fe6fd7
+873	1999	6596466737974573	DisassemblerTest/DisassemblerTest.exe	4d6dd1a1869c7b00

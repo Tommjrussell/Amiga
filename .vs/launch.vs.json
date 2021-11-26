@@ -1,0 +1,15 @@
+{
+  "version": "0.2.1",
+  "defaults": {},
+  "configurations": [
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "AmigaEmulator.exe (Emulator\\AmigaEmulator.exe)",
+      "name": "AmigaEmulator.exe (Emulator\\AmigaEmulator.exe)",
+      "args": [
+        "-r D:\\dev\\GitHub\\Amiga\\Emulator\\Files"
+      ]
+    }
+  ]
+}
