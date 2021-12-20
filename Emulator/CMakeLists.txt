@@ -7,9 +7,17 @@ find_package(imgui CONFIG REQUIRED)
 find_package(gl3w CONFIG REQUIRED)
 
 add_executable (AmigaEmulator
-	"disassembler.cpp" "disassembler.h"
 	"main.cpp"
-	"App.h" "App.cpp" "GlfwPlatform/RunGlfw.h" "GlfwPlatform/RunGlfw.cpp" "GlfwPlatform/shader.h" "GlfwPlatform/shader.cpp"  "util/file.h" "util/file.cpp" "debugger.cpp" "debugger.h")
+	"app.h" "app.cpp"
+	"GlfwPlatform/RunGlfw.h" "GlfwPlatform/RunGlfw.cpp"
+	"GlfwPlatform/shader.h" "GlfwPlatform/shader.cpp"
+	"util/file.h" "util/file.cpp"
+	"util/endian.h" "util/strings.h"
+	"debugger.cpp" "debugger.h"
+	"memory_editor.cpp" "memory_editor.h"
+	"amiga/amiga.cpp" "amiga/amiga.h"
+	"amiga/disassembler.cpp" "amiga/disassembler.h"
+	)
 
 target_include_directories(AmigaEmulator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

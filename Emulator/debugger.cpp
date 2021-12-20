@@ -1,57 +1,40 @@
 #include "debugger.h"
 
-#include "disassembler.h"
+#include "amiga/disassembler.h"
+#include "amiga/amiga.h"
+
+#include "util/strings.h"
 
 #include <imgui.h>
 
-guru::Memory::Memory(std::initializer_list<uint16_t> code)
+namespace guru
 {
-	for (auto e : code)
+	class DebuggerMemoryInterface : public am::IMemory
 	{
-		m_memory.push_back(uint8_t(e >> 8));
-		m_memory.push_back(uint8_t(e));
-	}
+	public:
+		explicit DebuggerMemoryInterface(am::Amiga* amiga)
+			: m_amiga(amiga)
+		{
+		}
+
+		uint16_t GetWord(uint32_t addr) const override
+		{
+			return m_amiga->PeekWord(addr);
+		}
+
+		uint8_t GetByte(uint32_t addr) const override
+		{
+			return m_amiga->PeekByte(addr);
+		}
+
+		private:
+			am::Amiga* m_amiga;
+	};
 }
 
-uint16_t guru::Memory::GetWord(uint32_t addr) const
+guru::Debugger::Debugger(am::Amiga* amiga)
 {
-	if ((addr & 1) == 1)
-	{
-		_ASSERTE(false);
-		return 0;
-	}
-
-	if (addr >= m_memory.size())
-	{
-		_ASSERTE(false);
-		return 0;
-	}
-
-	uint16_t value = uint16_t(m_memory[addr] << 8);
-	value |= uint16_t(m_memory[addr + 1]);
-
-	return value;
-}
-
-uint8_t guru::Memory::GetByte(uint32_t) const
-{
-	return 0;
-}
-
-
-guru::Debugger::Debugger()
-{
-	m_memory = std::make_unique<Memory>(std::initializer_list<uint16_t>{
-		0x1029, 0x001f,		// move.b ($001f, A1), D0
-		0x532e, 0x0126,		// subq.b $01, ($0126, A6)
-		0x4880,				// ext.w D0
-		0x4e75,				// rts
-		0x6632,				// bne 50 -> $00000040
-		0x4cd7, 0x55f0,
-		0x4cd5, 0xaaaa,
-		0x48d5, 0xaaaa,
-		0x4895, 0xffff});
-
+	m_memory = std::make_unique<DebuggerMemoryInterface>(amiga);
 	m_disassembler = std::make_unique<am::Disassembler>(m_memory.get());
 }
 
@@ -61,20 +44,37 @@ guru::Debugger::~Debugger()
 
 bool guru::Debugger::Draw()
 {
-	if (m_instructions.empty())
-	{
-		while (m_disassembler->pc < uint32_t(m_memory->GetSize()))
-		{
-			m_instructions.emplace_back(m_disassembler->Disassemble());
-		}
-	}
-
 	bool open = true;
 	ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
 	bool expanded = ImGui::Begin("Debugger", &open);
 
 	if (open && expanded)
 	{
+		ImGui::BeginChild("pc", ImVec2(0, 36), true);
+
+		ImGui::PushItemWidth(64);
+		if (ImGui::InputInt("pc", (int*)&m_pc, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_instructions.clear();
+		}
+		ImGui::PopItemWidth();
+
+		ImGui::EndChild();
+
+		if (m_instructions.empty())
+		{
+			m_disassembler->pc = m_pc;
+			auto end = m_pc + 128;
+
+			while (m_disassembler->pc < end)
+			{
+				std::string line = HexToString(m_disassembler->pc);
+				line += " : ";
+				line += m_disassembler->Disassemble();
+				m_instructions.emplace_back(line);
+			}
+		}
+
 		for (auto&l : m_instructions)
 		{
 			ImGui::Text(l.c_str());
