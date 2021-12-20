@@ -1,20 +1,4 @@
-CMakeLists.txt.user
-CMakeCache.txt
-CMakeFiles
-CMakeScripts
-Testing
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps
-/out/build/x64-Debug (default)
-/.vs/tasks.vs.json
-/.vs/VSWorkspaceState.json
-/.vs/slnx.sqlite
-/.vs/ProjectSettings.json
-/.vs/cmake.db
-/.vs/CMake Overview
-/.vs/Amiga/v16
-/.vs/gh/v16
+CMakeSettings.json
+/out/
+/.vs/
+/.git/
