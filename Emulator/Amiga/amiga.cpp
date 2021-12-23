@@ -2,6 +2,14 @@
 
 #include "util/endian.h"
 
+namespace
+{
+	bool IsSharedAccess(am::Mapped m)
+	{
+		return (uint32_t(m) & uint32_t(am::Mapped::Shared)) != 0;
+	}
+}
+
 am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom)
 {
 	m_chipRam.resize(size_t(chipRamConfig));
@@ -14,6 +22,16 @@ am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom)
 	{
 		m_rom = std::move(rom);
 	}
+
+	m_m68000 = std::make_unique<cpu::M68000>(this);
+
+	int delay;
+	m_m68000->Reset(delay);
+}
+
+void am::Amiga::SetPC(uint32_t pc)
+{
+	m_m68000->SetPC(pc);
 }
 
 uint8_t am::Amiga::PeekByte(uint32_t addr) const
@@ -111,4 +129,185 @@ std::tuple<am::Mapped, uint8_t*> am::Amiga::GetMappedMemory(uint32_t addr)
 	// Rom
 	const uint32_t romMask = uint32_t(m_rom.size()) - 1;
 	return { Mapped::Rom, m_rom.data() + ((addr - 0xf8'0000) & romMask) };
+}
+
+uint16_t am::Amiga::ReadBusWord(uint32_t addr)
+{
+	auto [type, mem] = GetMappedMemory(addr);
+	if (IsSharedAccess(type))
+	{
+		m_sharedBusRws++;
+	}
+	else
+	{
+		m_exclusiveBusRws++;
+	}
+
+	if (mem)
+	{
+		uint16_t value;
+		memcpy(&value, mem, 2);
+		return SwapEndian(value);
+	}
+	else
+	{
+		// TODO : implement register/peripheral access
+		return 0;
+	}
+}
+
+void am::Amiga::WriteBusWord(uint32_t addr, uint16_t value)
+{
+	auto [type, mem] = GetMappedMemory(addr);
+	if (IsSharedAccess(type))
+	{
+		m_sharedBusRws++;
+	}
+	else
+	{
+		m_exclusiveBusRws++;
+	}
+
+	if (mem && type != Mapped::Rom)
+	{
+		value = SwapEndian(value);
+		memcpy(mem, &value, 2);
+	}
+	else
+	{
+		// TODO : implement register/peripheral access
+	}
+}
+
+uint8_t am::Amiga::ReadBusByte(uint32_t addr)
+{
+	auto [type, mem] = GetMappedMemory(addr);
+	if (IsSharedAccess(type))
+	{
+		m_sharedBusRws++;
+	}
+	else
+	{
+		m_exclusiveBusRws++;
+	}
+
+	if (mem)
+	{
+		return *mem;
+	}
+	else
+	{
+		// TODO : implement register/peripheral access
+		return 0;
+	}
+}
+
+void am::Amiga::WriteBusByte(uint32_t addr, uint8_t value)
+{
+	auto [type, mem] = GetMappedMemory(addr);
+	if (IsSharedAccess(type))
+	{
+		m_sharedBusRws++;
+	}
+	else
+	{
+		m_exclusiveBusRws++;
+	}
+
+	if (mem && type != Mapped::Rom)
+	{
+		*mem = value;
+	}
+	else
+	{
+		// TODO : implement register/peripheral access
+	}
+}
+
+bool am::Amiga::ExecuteFor(uint64_t cclocks)
+{
+	const auto runTill = m_totalCClocks + cclocks;
+
+	bool running = true;
+
+	while (running && m_totalCClocks < runTill)
+	{
+		running = DoOneTick();
+	}
+	return true;
+}
+
+bool am::Amiga::ExecuteOneCpuInstruction()
+{
+	while (!CpuReady())
+	{
+		DoOneTick();
+	}
+
+	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode)
+	{
+		DoOneTick();
+	}
+
+	while (!(CpuReady() && m_m68000->GetExecutionState() != cpu::ExecuteState::ReadyToExecute))
+	{
+		DoOneTick();
+	}
+
+	return true;
+}
+
+bool am::Amiga::ExecuteToEndOfCpuInstruction()
+{
+	while (!CpuReady())
+	{
+		DoOneTick();
+	}
+
+	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToExecute)
+	{
+		do
+		{
+			DoOneTick();
+		}
+		while (!CpuReady());
+	}
+	return true;
+}
+
+bool am::Amiga::DoOneTick()
+{
+	bool running = true;
+	bool chipBusBusy = false;
+
+	if (CpuReady())
+	{
+		running = m_m68000->Execute(m_cpuBusyTimer);
+	}
+
+	if (m_cpuBusyTimer > 0)
+	{
+		m_cpuBusyTimer--;
+	}
+	else
+	{
+		if (m_exclusiveBusRws > 0)
+		{
+			m_exclusiveBusRws--;
+			m_cpuBusyTimer = 2;
+		}
+		else if (m_sharedBusRws > 0)
+		{
+			if (!chipBusBusy)
+			{
+				m_sharedBusRws--;
+				m_cpuBusyTimer = 2;
+				chipBusBusy = true;
+			}
+		}
+	}
+
+	m_totalCClocks++;
+
+	return running;
 }

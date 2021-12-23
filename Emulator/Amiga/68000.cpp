@@ -1,0 +1,949 @@
+#include "68000.h"
+
+#include "68000.h"
+
+#include <functional>
+#include <utility>
+
+using namespace cpu;
+
+namespace
+{
+	int gOpcodeGroups[16] = {};
+
+	struct InstructionCode
+	{
+		uint16_t mask;
+		uint16_t signature;
+	};
+
+	const InstructionCode kEncodingList[kNumOpcodeEntries] =
+	{
+		{ 0b11111111'11111111,	0b00000000'00111100 }, //	ori     {imm:b}, CCR
+		{ 0b11111111'11111111,	0b00000000'01111100 }, //	ori     {imm:w}, SR
+		{ 0b11111111'00000000,	0b00000000'00000000 }, //	ori.{s}   {imm}, {ea}
+		{ 0b11111111'11111111,	0b00000010'00111100 }, //	andi    {imm:b}, CCR
+		{ 0b11111111'11111111,	0b00000010'01111100 }, //	andi    {imm:w}, SR
+		{ 0b11111111'00000000,	0b00000010'00000000 }, //	andi.{s}  {imm}, {ea}
+		{ 0b11111111'00000000,	0b00000100'00000000 }, //	subi.{s}  {imm}, {ea}
+		{ 0b11111111'00000000,	0b00000110'00000000 }, //	addi.{s}  {imm}, {ea}
+		{ 0b11111111'11111111,	0b00001010'00111100 }, //	eori    {imm:b}, CCR
+		{ 0b11111111'11111111,	0b00001010'01111100 }, //	eori    {imm:w}, SR
+		{ 0b11111111'00000000,	0b00001010'00000000 }, //	eori.{s}  {imm}, {ea}
+		{ 0b11111111'00000000,	0b00001100'00000000 }, //	cmpi.{s}  {imm}, {ea}
+		{ 0b11111111'11000000,	0b00001000'00000000 }, //	btst    {imm:b}, {ea}
+		{ 0b11111111'00000000,	0b00001000'00000000 }, //	b(chg/clr/set)    {imm:b}, {ea}
+		{ 0b11110001'10111000,	0b00000001'00001000 }, //	movep.{wl} ({immDis16}, A{reg}), D{REG}
+		{ 0b11110001'10111000,	0b00000001'10001000 }, //	movep.{wl} D{REG}, ({immDis16}, A{reg})
+		{ 0b11110001'11000000,	0b00000001'00000000 }, //	btst    D{REG}, {ea}
+		{ 0b11110001'00000000,	0b00000001'00000000 }, //	b(chg/clr/set)    D{REG}, {ea}
+
+		{ 0b11110000'00000000,	0b00010000'00000000 }, //	move.b
+		{ 0b11110000'00000000,	0b00100000'00000000 }, //	movea/move.l
+		{ 0b11110000'00000000,	0b00110000'00000000 }, //	movea/move.w
+
+		{ 0b11111111'11000000,	0b01000000'11000000 }, //	move    SR, {ea:w}
+		{ 0b11111111'11000000,	0b01000100'11000000 }, //	move    {ea:b}, CCR
+		{ 0b11111111'11000000,	0b01000110'11000000 }, //	move    {ea:w}, SR
+		{ 0b11111111'00000000,	0b01000000'00000000 }, //	negx.{s}  {ea}
+		{ 0b11111111'00000000,	0b01000010'00000000 }, //	clr.{s}   {ea}
+		{ 0b11111111'00000000,	0b01000100'00000000 }, //	neg.{s}   {ea}
+		{ 0b11111111'00000000,	0b01000110'00000000 }, //	not.{s}   {ea}
+		{ 0b11111111'10111000,	0b01001000'10000000 }, //	ext.{wl}   D{reg}
+		{ 0b11111111'11000000,	0b01001000'00000000 }, //	nbcd    {ea:b}
+		{ 0b11111111'11111000,	0b01001000'01000000 }, //	swap    D{reg}
+		{ 0b11111111'11000000,	0b01001000'01000000 }, //	pea     {ea:l}
+		{ 0b11111111'11000000,	0b01001010'11000000 }, //	tas     {ea:b}
+		{ 0b11111111'11000000,	0b01001010'00000000 }, //	tst.b     {ea}
+		{ 0b11111111'00000000,	0b01001010'00000000 }, //	tst.{s}   {ea}
+		{ 0b11111111'11110000,	0b01001110'01000000 }, //	trap    {v}
+		{ 0b11111111'11111000,	0b01001110'01010000 }, //	link    A{reg}, {immDis16}
+		{ 0b11111111'11111000,	0b01001110'01011000 }, //	unlk    A{reg}
+		{ 0b11111111'11110000,	0b01001110'01100000 }, //	move    A{reg}, USP
+		{ 0b11111111'11111111,	0b01001110'01110000 }, //	reset
+		{ 0b11111111'11111111,	0b01001110'01110001 }, //	nop
+		{ 0b11111111'11111111,	0b01001110'01110010 }, //	stop
+		{ 0b11111111'11111111,	0b01001110'01110011 }, //	rte
+		{ 0b11111111'11111111,	0b01001110'01110101 }, //	rts
+		{ 0b11111111'11111111,	0b01001110'01110110 }, //	trapv
+		{ 0b11111111'11111111,	0b01001110'01110111 }, //	rtr
+		{ 0b11111111'11000000,	0b01001110'10000000 }, //	jsr     {ea}
+		{ 0b11111111'11000000,	0b01001110'11000000 }, //	jmp     {ea}
+		{ 0b11111111'10000000,	0b01001000'10000000 }, //	movem.{wl} {list}, {ea}
+		{ 0b11111111'10000000,	0b01001100'10000000 }, //	movem.{wl} {ea}, {list}
+		{ 0b11110001'11000000,	0b01000001'11000000 }, //	lea     {ea}, A{REG}
+		{ 0b11110001'11000000,	0b01000001'10000000 }, //	chk     {ea}, D{REG}
+
+		{ 0b11110000'11111000,	0b01010000'11001000 }, //	db{cc}    D{reg}, {braDisp}
+		{ 0b11110000'11000000,	0b01010000'11000000 }, //	s{cc}     {ea}
+		{ 0b11110001'00000000,	0b01010000'00000000 }, //	addq.{s}  {q}, {ea}
+		{ 0b11110001'00000000,	0b01010001'00000000 }, //	subq.{s}  {q}, {ea}
+
+		{ 0b11111111'00000000,	0b01100001'00000000 }, //	bsr     {disp}
+		{ 0b11110000'00000000,	0b01100000'00000000 }, //	b{cc}     {disp}
+
+		{ 0b11110001'00000000,	0b01110000'00000000 }, //	moveq   {data}, D{REG}
+
+		{ 0b11110001'11000000,	0b10000000'11000000 }, //	divu    {ea:w}, D{REG}
+		{ 0b11110001'11000000,	0b10000001'11000000 }, //	divs    {ea:w}, D{REG}
+		{ 0b11110001'11110000,	0b10000001'00000000 }, //	sbcd    {m}
+		{ 0b11110001'00000000,	0b10000000'00000000 }, //	or.{s}    {ea}, D{REG}
+		{ 0b11110001'00000000,	0b10000001'00000000 }, //	or.{s}    D{REG}, {ea}
+
+		{ 0b11110000'11000000,	0b10010000'11000000 }, //	suba.{WL}  {ea}, A{REG}
+		{ 0b11110001'00110000,	0b10010001'00000000 }, //	subx.{s}  {m}
+		{ 0b11110001'00000000,	0b10010000'00000000 }, //	sub.{s}   {ea}, D{REG}
+		{ 0b11110001'00000000,	0b10010001'00000000 }, //	sub.{s}   D{REG}, {ea}
+
+		{ 0b11110000'11000000,	0b10110000'11000000 }, //	cmpa.{WL}  {ea}, A{REG}
+		{ 0b11110001'00111000,	0b10110001'00001000 }, //	cmpm.{s}  A{reg}+, A{REG}+
+		{ 0b11110001'00000000,	0b10110000'00000000 }, //	cmp.{s}   {ea}, D{REG}
+		{ 0b11110001'00000000,	0b10110001'00000000 }, //	eor.{s}   D{REG}, {ea}
+
+		{ 0b11110001'11000000,	0b11000000'11000000 }, //	mulu    {ea}, D{REG}
+		{ 0b11110001'11000000,	0b11000001'11000000 }, //	muls    {ea}, D{REG}
+		{ 0b11110001'11110000,	0b11000001'00000000 }, //	abcd    {m}
+		{ 0b11110001'00110000,	0b11000001'00000000 }, //	exg     reg, reg
+		{ 0b11110001'00000000,	0b11000000'00000000 }, //	and.{s}   {ea}, D{REG}
+		{ 0b11110001'00000000,	0b11000001'00000000 }, //	and.{s}   D{REG}, {ea}
+
+		{ 0b11110000'11000000,	0b11010000'11000000 }, //	adda.{WL}  {ea}, A{REG}
+		{ 0b11110001'00110000,	0b11010001'00000000 }, //	addx.{s}  {m}
+		{ 0b11110001'00000000,	0b11010000'00000000 }, //	add.{s}   {ea}, D{REG}
+		{ 0b11110001'00000000,	0b11010001'00000000 }, //	add.{s}   D{REG}, {ea}
+
+		{ 0b11111110'11000000,	0b11100000'11000000 }, //	as{R}     {ea}
+		{ 0b11111110'11000000,	0b11100010'11000000 }, //	ls{R}     {ea}
+		{ 0b11111110'11000000,	0b11100100'11000000 }, //	rox{R}    {ea}
+		{ 0b11111110'11000000,	0b11100110'11000000 }, //	ro{R}     {ea}
+		{ 0b11110000'00111000,	0b11100000'00000000 }, //	as{R}.{s}   {q}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00001000 }, //	ls{R}.{s}   {q}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00010000 }, //	rox{R}.{s}  {q}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00011000 }, //	ro{R}.{s}   {q}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00100000 }, //	as{R}.{s}   D{REG}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00101000 }, //	ls{R}.{s}   D{REG}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00110000 }, //	rox{R}.{s}  D{REG}, D{reg}
+		{ 0b11110000'00111000,	0b11100000'00111000 }, //	ro{R}.{s}   D{REG}, D{reg}
+	};
+
+	constexpr uint8_t kImmediateDecodeMask = 0x03;
+	constexpr uint8_t kImmediateNone = 0x00;
+	constexpr uint8_t kImmediateUseSize = 0x01;
+	constexpr uint8_t kImmediateWord = 0x02;
+
+	constexpr uint8_t kEffectiveAddress1 = 0x04;
+	constexpr uint8_t kEffectiveAddress2 = 0x08;
+
+	constexpr uint8_t kSizeMask = 0x70;
+	constexpr uint8_t kSizeUnspecified = 0x00; // unsized opcode.
+	constexpr uint8_t kSizeVariableNormal = 0x10; // 2-bit (B/W/L) at bits #7-8
+	constexpr uint8_t kSizeVariableSmallLow = 0x20; // 1-bit (W/L) at bit #7
+	constexpr uint8_t kSizeVariableSmall = 0x30; // 1-bit (W/L) at bit #9
+	constexpr uint8_t kSizeFixedByte = 0x40;
+	constexpr uint8_t kSizeFixedWord = 0x50;
+	constexpr uint8_t kSizeFixedLong = 0x60;
+
+	constexpr uint8_t kSupervisor = 0x80;
+
+	constexpr uint16_t kSizeMaskNormal = 0x00c0;
+	constexpr uint16_t kSizeMaskSmallLow = 0x0040;
+	constexpr uint16_t kSizeMaskSmall = 0x0100;
+
+
+	struct Decoding
+	{
+		uint8_t code;
+		uint16_t eaMask;
+	};
+
+	const Decoding kDecoding[kNumOpcodeEntries] =
+	{
+		{ kSizeVariableNormal | kImmediateUseSize, 0 },															//	ori     {imm:b}, CCR
+		{ kSizeVariableNormal | kImmediateUseSize | kSupervisor, 0 },											//	ori     {imm:w}, SR
+		{ kSizeVariableNormal | kImmediateUseSize | kEffectiveAddress1, EA::DataAlterable },					//	ori.{s}   {imm}, {ea}
+		{ kSizeVariableNormal | kImmediateUseSize, 0 },															//	andi    {imm:b}, CCR
+		{ kSizeVariableNormal | kImmediateUseSize | kSupervisor, 0 },											//	andi    {imm:w}, SR
+		{ kSizeVariableNormal | kImmediateUseSize | kEffectiveAddress1, EA::DataAlterable },					//	andi.{s}  {imm}, {ea}
+		{ kSizeVariableNormal | kImmediateUseSize | kEffectiveAddress1, EA::DataAlterable },					//	subi.{s}  {imm}, {ea}
+		{ kSizeVariableNormal | kImmediateUseSize | kEffectiveAddress1, EA::DataAlterable },					//	addi.{s}  {imm}, {ea}
+		{ kSizeVariableNormal | kImmediateUseSize, 0 },															//	eori    {imm:b}, CCR/SR
+		{ kSizeVariableNormal | kImmediateUseSize | kSupervisor, 0 },											//	eori    {imm:w}, SR
+		{ kSizeVariableNormal | kImmediateUseSize | kEffectiveAddress1, EA::DataAlterable },					//	eori.{s}  {imm}, {ea}
+		{ kSizeVariableNormal | kImmediateUseSize | kEffectiveAddress1, EA::DataAlterable | EA::PcRelative },	//	cmpi.{s}  {imm}, {ea}
+		{ kSizeFixedByte | kImmediateWord | kEffectiveAddress1, EA::DataAlterable | EA::PcRelative },			//	btst    {imm:b}, {ea}
+		{ kSizeFixedByte | kImmediateWord | kEffectiveAddress1, EA::DataAlterable },							//	b(chg/clr/set)    {imm:b}, {ea}
+		{ kImmediateWord, 0 },																					//	movep.{wl} ({immDis16}, A{reg}), D{REG}
+		{ kImmediateWord, 0 },																					//	movep.{wl} D{REG}, ({immDis16}, A{reg})
+		{ kSizeFixedByte | kEffectiveAddress1, EA::DataAddressing },											//	btst    D{REG}, {ea}
+		{ kSizeFixedByte | kEffectiveAddress1, EA::DataAlterable },												//	b(chg/clr/set)    D{REG}, {ea}
+		{ kEffectiveAddress1 | kEffectiveAddress2 | kSizeFixedByte, EA::All },									//	movea/move.b
+		{ kEffectiveAddress1 | kEffectiveAddress2 | kSizeFixedLong, EA::All },									//	movea/move.l
+		{ kEffectiveAddress1 | kEffectiveAddress2 | kSizeFixedWord, EA::All },									//	movea/move.w
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAlterable },												//	move    SR, {ea:w}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	move    {ea:b}, CCR (NOTE : this is a word size operation despite what the opcode sheet says (upper byte ignored though))
+		{ kSizeFixedWord | kEffectiveAddress1 | kSupervisor, EA::DataAddressing },								//	move    {ea:w}, SR
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::DataAlterable },										//	negx.{s}  {ea}
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::DataAlterable },										//	clr.{s}   {ea}
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::DataAlterable },										//	neg.{s}   {ea}
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::DataAlterable },										//	not.{s}   {ea}
+		{ kSizeVariableSmallLow, 0 },																			//	ext.{wl}   D{reg}
+		{ kSizeFixedByte | kEffectiveAddress1, EA::DataAlterable },												//	nbcd    {ea:b}
+		{ 0, 0 },																								//	swap    D{reg}
+		{ kEffectiveAddress1, EA::ControlAddressing },															//	pea     {ea:l}
+		{ kEffectiveAddress1, EA::DataAlterable },																//	tas     {ea:b}
+		{ kSizeFixedByte | kEffectiveAddress1, EA::DataAlterable | EA::PcRelative },							//	tst.b     {ea}
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::All },													//	tst.{s}   {ea}
+		{ 0, 0 },																								//	trap    {v}
+		{ kImmediateWord, 0 },																					//	link    A{reg}, {immDis16}
+		{ 0, 0 },																								//	unlk    A{reg}
+		{ kSupervisor, 0 },																						//	move    A{reg}, USP
+		{ 0, 0 },																								//	reset
+		{ 0, 0 },																								//	nop
+		{ kImmediateWord | kSupervisor, 0 },																	//	stop
+		{ kSupervisor, 0 },																						//	rte
+		{ 0, 0 },																								//	rts
+		{ 0, 0 },																								//	trapv
+		{ 0, 0 },																								//	rtr
+		{ kEffectiveAddress1, EA::ControlAddressing },															//	jsr     {ea}
+		{ kEffectiveAddress1, EA::ControlAddressing },															//	jmp     {ea}
+		{ kImmediateWord | kSizeVariableSmallLow | kEffectiveAddress1, EA::ControlAlterable | EA::AddressWithPreDec },		//	movem.{wl} {list}, {ea}
+		{ kImmediateWord | kSizeVariableSmallLow | kEffectiveAddress1, EA::ControlAddressing | EA::AddressWithPostInc },	//	movem.{wl} {ea}, {list}
+		{ kEffectiveAddress1, EA::ControlAddressing },															//	lea     {ea}, A{REG}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	chk     {ea}, D{REG}
+		{ kImmediateWord, 0 },																					//	db{cc}    D{reg}, {braDisp}
+		{ kSizeFixedByte | kEffectiveAddress1, EA::DataAlterable },												//	s{cc}     {ea}
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::Alterable },											//	addq.{s}  {q}, {ea}
+		{ kSizeVariableNormal | kEffectiveAddress1, EA::Alterable },											//	subq.{s}  {q}, {ea}
+		{ 0, 0 },																								//	bsr     {disp}
+		{ 0, 0 },																								//	b{cc}     {disp}
+		{ 0, 0 },																								//	moveq   {data}, D{REG}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	divu    {ea:w}, D{REG}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	divs    {ea:w}, D{REG}
+		{ 0, 0 },																								//	sbcd    {m}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	or.{s}    {ea}, D{REG}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	or.{s}    D{REG}, {ea}
+		{ kEffectiveAddress1 | kSizeVariableSmall, EA::All },													//	suba.{WL}  {ea}, A{REG}
+		{ kSizeVariableNormal, 0 },																				//	subx.{s}  {m}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	sub.{s}   {ea}, D{REG}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::MemoryAlterable },										//	sub.{s}   D{REG}, {ea}
+		{ kEffectiveAddress1 | kSizeVariableSmall, EA::All },													//	cmpa.{WL}  {ea}, A{REG}
+		{ kSizeVariableNormal, 0 },																				//	cmpm.{s}  A{reg}+, A{REG}+
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	cmp.{s}   {ea}, D{REG}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::DataAlterable },										//	eor.{s}   D{REG}, {ea}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	mulu    {ea}, D{REG}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	muls    {ea}, D{REG}
+		{ 0, 0 },																								//	abcd    {m}
+		{ 0, 0 },																								//	exg     reg, reg
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::DataAddressing },										//	and.{s}   {ea}, D{REG}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::MemoryAlterable },										//	and.{s}   D{REG}, {ea}
+		{ kEffectiveAddress1 | kSizeVariableSmall, EA::All },													//	adda.{WL}  {ea}, A{REG}
+		{ kSizeVariableNormal, 0 },																				//	addx.{s}  {m}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	add.{s}   {ea}, D{REG}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::MemoryAlterable },										//	add.{s}   D{REG}, {ea}
+		{ kEffectiveAddress1, EA::MemoryAlterable },															//	as{R}     {ea}
+		{ kEffectiveAddress1, EA::MemoryAlterable },															//	ls{R}     {ea}
+		{ kEffectiveAddress1, EA::MemoryAlterable },															//	rox{R}    {ea}
+		{ kEffectiveAddress1, EA::MemoryAlterable },															//	ro{R}     {ea}
+		{ kSizeVariableNormal, 0 },																				//	as{R}.{s}   {q}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	ls{R}.{s}   {q}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	rox{R}.{s}  {q}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	ro{R}.{s}   {q}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	as{R}.{s}   D{REG}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	ls{R}.{s}   D{REG}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	rox{R}.{s}  D{REG}, D{reg}
+		{ kSizeVariableNormal, 0 },																				//	ro{R}.{s}   D{REG}, D{reg}
+	};
+
+	bool BuildOpcodeGroupsTable()
+	{
+		const uint16_t groupMask = 0xf000;
+
+		for (int i = 0; i < 16; i++)
+		{
+			uint16_t toMatch = uint16_t(i << 12);
+			int j = 0;
+			for (; j < int(kNumOpcodeEntries); j++)
+			{
+				if ((kEncodingList[j].signature & groupMask) == toMatch)
+				{
+					gOpcodeGroups[i] = j;
+					break;
+				}
+			}
+		}
+		return true;
+	}
+
+	constexpr uint64_t SignExtend64(uint16_t value)
+	{
+		return uint64_t((int64_t(value) << 48) >> 48);
+	}
+
+	constexpr uint32_t SignExtend(uint16_t value)
+	{
+		return int32_t(int16_t(value));
+	}
+
+	uint32_t GetReg(const uint32_t& r, int size)
+	{
+		switch (size)
+		{
+		case 1:
+			return (r & 0x000000ff);
+		case 2:
+			return (r & 0x0000ffff);
+		case 4:
+		default:
+			return r;
+		}
+	}
+
+	void SetReg(uint32_t& r, int size, uint32_t value)
+	{
+		switch (size)
+		{
+		case 1:
+			r &= 0xffffff00;
+			r |= value & 0x000000ff;
+			break;
+
+		case 2:
+			r &= 0xffff0000;
+			r |= value & 0x0000ffff;
+			break;
+
+		case 4:
+		default:
+			r = value;
+		}
+	}
+
+}
+
+M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
+{
+	&M68000::UnimplementOpcode,		//	ori     {imm:b}, CCR
+	&M68000::UnimplementOpcode,		//	ori     {imm:w}, SR
+	&M68000::UnimplementOpcode,		//	ori.{s}   {imm}, {ea}
+	&M68000::UnimplementOpcode,		//	andi    {imm:b}, CCR
+	&M68000::UnimplementOpcode,		//	andi    {imm:w}, SR
+	&M68000::UnimplementOpcode,		//	andi.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,		//	subi.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,		//	addi.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,		//	eori    {imm:b}, CCR
+	&M68000::UnimplementOpcode,		//	eori    {imm:w}, SR
+	&M68000::UnimplementOpcode,		//	eori.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,		//	cmpi.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,		//	btst    {imm:b}, {ea}
+	&M68000::UnimplementOpcode,		//	b(chg/clr/set)    {imm:b}, {ea}
+	&M68000::UnimplementOpcode,		//	movep.{wl} ({immDis16}, A{reg}), D{REG}
+	&M68000::UnimplementOpcode,		//	movep.{wl} D{REG}, ({immDis16}, A{reg})
+	&M68000::UnimplementOpcode,		//	btst    D{REG}, {ea}
+	&M68000::UnimplementOpcode,		//	b(chg/clr/set)    D{REG}, {ea}
+	&M68000::Opcode_move,			//	movea/move.b
+	&M68000::Opcode_move,			//	movea/move.l
+	&M68000::Opcode_move,			//	movea/move.w
+	&M68000::UnimplementOpcode,		//	move    SR, {ea:w}
+	&M68000::UnimplementOpcode,		//	move    {ea:b}, CCR
+	&M68000::UnimplementOpcode,		//	move    {ea:w}, SR
+	&M68000::UnimplementOpcode,		//	negx.{s}  {ea}
+	&M68000::UnimplementOpcode,		//	clr.{s}   {ea}
+	&M68000::UnimplementOpcode,		//	neg.{s}   {ea}
+	&M68000::UnimplementOpcode,		//	not.{s}   {ea}
+	&M68000::UnimplementOpcode,		//	ext.{wl}   D{reg}
+	&M68000::UnimplementOpcode,		//	nbcd    {ea:b}
+	&M68000::UnimplementOpcode,		//	swap    D{reg}
+	&M68000::UnimplementOpcode,		//	pea     {ea:l}
+	&M68000::UnimplementOpcode,		//	tas     {ea:b}
+	&M68000::UnimplementOpcode,		//	tst.b     {ea}
+	&M68000::UnimplementOpcode,		//	tst.{s}   {ea}
+	&M68000::UnimplementOpcode,		//	trap    {v}
+	&M68000::UnimplementOpcode,		//	link    A{reg}, {immDis16}
+	&M68000::UnimplementOpcode,		//	unlk    A{reg}
+	&M68000::UnimplementOpcode,		//	move    A{reg}, USP
+	&M68000::UnimplementOpcode,		//	reset
+	&M68000::UnimplementOpcode,		//	nop
+	&M68000::UnimplementOpcode,		//	stop
+	&M68000::UnimplementOpcode,		//	rte
+	&M68000::UnimplementOpcode,		//	rts
+	&M68000::UnimplementOpcode,		//	trapv
+	&M68000::UnimplementOpcode,		//	rtr
+	&M68000::UnimplementOpcode,		//	jsr     {ea}
+	&M68000::UnimplementOpcode,		//	jmp     {ea}
+	&M68000::UnimplementOpcode,		//	movem.{wl} {list}, {ea}
+	&M68000::UnimplementOpcode,		//	movem.{wl} {ea}, {list}
+	&M68000::Opcode_lea,			//	lea     {ea}, A{REG}
+	&M68000::UnimplementOpcode,		//	chk     {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	db{cc}    D{reg}, {braDisp}
+	&M68000::UnimplementOpcode,		//	s{cc}     {ea}
+	&M68000::UnimplementOpcode,		//	addq.{s}  {q}, {ea}
+	&M68000::UnimplementOpcode,		//	subq.{s}  {q}, {ea}
+	&M68000::UnimplementOpcode,		//	bsr     {disp}
+	&M68000::UnimplementOpcode,		//	b{cc}     {disp}
+	&M68000::UnimplementOpcode,		//	moveq   {data}, D{REG}
+	&M68000::UnimplementOpcode,		//	divu    {ea:w}, D{REG}
+	&M68000::UnimplementOpcode,		//	divs    {ea:w}, D{REG}
+	&M68000::UnimplementOpcode,		//	sbcd    {m}
+	&M68000::UnimplementOpcode,		//	or.{s}    {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	or.{s}    D{REG}, {ea}
+	&M68000::UnimplementOpcode,		//	suba.{WL}  {ea}, A{REG}
+	&M68000::UnimplementOpcode,		//	subx.{s}  {m}
+	&M68000::UnimplementOpcode,		//	sub.{s}   {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	sub.{s}   D{REG}, {ea}
+	&M68000::UnimplementOpcode,		//	cmpa.{WL}  {ea}, A{REG}
+	&M68000::UnimplementOpcode,		//	cmpm.{s}  A{reg}+, A{REG}+
+	&M68000::UnimplementOpcode,		//	cmp.{s}   {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	eor.{s}   D{REG}, {ea}
+	&M68000::UnimplementOpcode,		//	mulu    {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	muls    {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	abcd    {m}
+	&M68000::UnimplementOpcode,		//	exg     reg, reg
+	&M68000::UnimplementOpcode,		//	and.{s}   {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	and.{s}   D{REG}, {ea}
+	&M68000::UnimplementOpcode,		//	adda.{WL}  {ea}, A{REG}
+	&M68000::UnimplementOpcode,		//	addx.{s}  {m}
+	&M68000::UnimplementOpcode,		//	add.{s}   {ea}, D{REG}
+	&M68000::UnimplementOpcode,		//	add.{s}   D{REG}, {ea}
+	&M68000::UnimplementOpcode,		//	as{R}     {ea}
+	&M68000::UnimplementOpcode,		//	ls{R}     {ea}
+	&M68000::UnimplementOpcode,		//	rox{R}    {ea}
+	&M68000::UnimplementOpcode,		//	ro{R}     {ea}
+	&M68000::UnimplementOpcode,		//	as{R}.{s}   {q}, D{reg}
+	&M68000::UnimplementOpcode,		//	ls{R}.{s}   {q}, D{reg}
+	&M68000::UnimplementOpcode,		//	rox{R}.{s}  {q}, D{reg}
+	&M68000::UnimplementOpcode,		//	ro{R}.{s}   {q}, D{reg}
+	&M68000::UnimplementOpcode,		//	as{R}.{s}   D{REG}, D{reg}
+	&M68000::UnimplementOpcode,		//	ls{R}.{s}   D{REG}, D{reg}
+	&M68000::UnimplementOpcode,		//	rox{R}.{s}  D{REG}, D{reg}
+	&M68000::UnimplementOpcode,		//	ro{R}.{s}   D{REG}, D{reg}
+};
+
+
+M68000::M68000(IBus* bus)
+	: m_bus(bus)
+{
+	// TODO: Can this be done at compile time?
+	BuildOpcodeGroupsTable();
+}
+
+void M68000::Reset(int& delay)
+{
+	m_executeState = ExecuteState::ReadyToDecode;
+	memset(&m_regs, 0, sizeof(Registers));
+	m_regs.a[7] = m_bus->ReadBusWord(0x0000);
+	m_regs.pc = ReadBusLong(0x0004);
+	m_regs.status = 0b00100111'00000000;
+	delay = 62;
+}
+
+bool M68000::DecodeOneInstruction(int& delay)
+{
+	// returns false on illegal instruction
+
+	m_executeState = ExecuteState::ReadyToExecute;
+
+	m_operationAddr = m_regs.pc;
+
+	m_operation = FetchNextOperationWord();
+
+	m_currentInstructionIndex = kNumOpcodeEntries; // represents illegal opcode
+
+	size_t instIndex = gOpcodeGroups[(m_operation & 0xf000) >> 12];
+	for (; instIndex < kNumOpcodeEntries; instIndex++)
+	{
+		if ((m_operation & kEncodingList[instIndex].mask) == kEncodingList[instIndex].signature)
+		{
+			m_currentInstructionIndex = uint32_t(instIndex);
+			break;
+		}
+	}
+
+	if (instIndex >= kNumOpcodeEntries)
+	{
+		// illegal opcode so no further decoding required.
+		m_regs.pc = m_operationAddr;
+		return false;
+	}
+
+	const auto decodeCode = kDecoding[instIndex].code;
+
+	if (!InSupervisorMode() && ((decodeCode & kSupervisor) != 0))
+	{
+		// Privileged instruction
+		m_regs.pc = m_operationAddr;
+		m_currentInstructionIndex = ~0;
+		return true;
+	}
+
+	const auto sizeType = decodeCode & kSizeMask;
+
+	switch (sizeType)
+	{
+	case kSizeUnspecified:
+		m_opcodeSize = 0;
+		break;
+
+	case kSizeVariableNormal:
+	{
+		const auto size = (m_operation & kSizeMaskNormal) >> 6;
+		m_opcodeSize = (size == 0b00) ? 1
+			: (size == 0b01) ? 2
+			: (size == 0b10) ? 4
+			: 0;
+
+		if (m_opcodeSize == 0)
+		{
+			m_regs.pc = m_operationAddr;
+			m_currentInstructionIndex = kNumOpcodeEntries; // used to indicate illegal instruction
+			return false;
+		}
+	}	break;
+
+	case kSizeVariableSmallLow:
+	{
+		m_opcodeSize = ((m_operation & kSizeMaskSmallLow) != 0) ? 4 : 2;
+	}	break;
+
+	case kSizeVariableSmall:
+	{
+		m_opcodeSize = ((m_operation & kSizeMaskSmall) != 0) ? 4 : 2;
+	}	break;
+
+	case kSizeFixedByte:
+		m_opcodeSize = 1;
+		break;
+
+	case kSizeFixedWord:
+		m_opcodeSize = 2;
+		break;
+
+	case kSizeFixedLong:
+		m_opcodeSize = 4;
+		break;
+	}
+
+	const auto immType = decodeCode & kImmediateDecodeMask;
+	switch (immType)
+	{
+	case kImmediateNone:
+		break;
+
+	case kImmediateUseSize:
+		if (m_opcodeSize == 4)
+		{
+			m_immediateValue = uint32_t(FetchNextOperationWord()) << 16;
+			m_immediateValue |= FetchNextOperationWord();
+		}
+		else
+		{
+			m_immediateValue = FetchNextOperationWord();
+			if (m_opcodeSize == 1)
+			{
+				m_immediateValue &= 0x00ff;
+			}
+		}
+		break;
+
+	case kImmediateWord:
+		m_immediateValue = FetchNextOperationWord();
+		break;
+	}
+
+	bool hasEa1 = (decodeCode & kEffectiveAddress1) != 0;
+	bool hasEa2 = (decodeCode & kEffectiveAddress2) != 0;
+
+	if ((decodeCode & kEffectiveAddress1) != 0)
+	{
+		m_ea[0].mode = (m_operation >> 3) & 0x7;
+		m_ea[0].xn = (m_operation & 0x7);
+		m_ea[0] = DecodeEffectiveAddress(m_ea[0].mode, m_ea[0].xn, m_opcodeSize, delay);
+	}
+	if ((decodeCode & kEffectiveAddress2) != 0)
+	{
+		m_ea[1].mode = (m_operation >> 6) & 0x7;
+		m_ea[1].xn = (m_operation >> 9) & 0x7;
+		m_ea[1] = DecodeEffectiveAddress(m_ea[1].mode, m_ea[1].xn, m_opcodeSize, delay);
+	}
+
+	return true;
+}
+
+uint16_t M68000::FetchNextOperationWord()
+{
+	auto value = m_bus->ReadBusWord(m_regs.pc);
+	m_regs.pc += 2;
+	return value;
+}
+
+uint32_t M68000::ReadBusLong(uint32_t addr)
+{
+	uint32_t value = m_bus->ReadBusWord(addr);
+	value <<= 16;
+	value = m_bus->ReadBusWord(addr + 2);
+	return value;
+}
+
+void M68000::WriteBusLong(uint32_t addr, uint32_t value)
+{
+	m_bus->WriteBusWord(addr, uint16_t(value >> 16));
+	m_bus->WriteBusWord(addr + 2, uint16_t(value));
+}
+
+uint32_t M68000::ReadBus(uint32_t addr, int size)
+{
+	switch (size)
+	{
+	case 1:
+		return m_bus->ReadBusByte(addr);
+
+	case 2:
+		return m_bus->ReadBusWord(addr);
+
+	case 4:
+	default:
+		return ReadBusLong(addr);
+	}
+}
+
+void M68000::WriteBus(uint32_t addr, int size, uint32_t value)
+{
+	switch (size)
+	{
+	case 1:
+		return m_bus->WriteBusByte(addr, uint8_t(value));
+
+	case 2:
+		return m_bus->WriteBusWord(addr, uint16_t(value));
+
+	case 4:
+	default:
+		return WriteBusLong(addr, value);
+	}
+}
+
+M68000::EA M68000::DecodeEffectiveAddress(uint32_t mode, uint32_t xn, int size, int& delay)
+{
+	switch (mode)
+	{
+	case 0b000: // Dn
+		return { EffectiveAddressType::DataRegister, xn };
+
+	case 0b001: // An
+		return { EffectiveAddressType::AddressRegister, xn };
+
+	case 0b010: // (An)
+		return { EffectiveAddressType::MemoryAlterable, m_regs.a[xn] };
+
+	case 0b011: // (An)+
+	{
+		if (size == 0)
+			return { EffectiveAddressType::Bad, };
+
+		const auto addr = m_regs.a[xn];
+		auto newAddr = addr;
+		if (size == 1 && xn == 7)
+		{
+			newAddr += 2;
+		}
+		else
+		{
+			newAddr += size;
+		}
+		m_regs.a[xn] = newAddr;
+		return { EffectiveAddressType::MemoryAlterable, addr };
+	}
+
+	case 0b100: // -(An)
+	{
+		if (size == 0)
+			return { EffectiveAddressType::Bad, };
+
+		auto addr = m_regs.a[xn];
+		if (size == 1 && xn == 7)
+		{
+			addr -= 2;
+		}
+		else
+		{
+			addr -= size;
+		}
+		m_regs.a[xn] = addr;
+		delay++;
+		return { EffectiveAddressType::MemoryAlterable, addr };
+	}
+
+	case 0b101: // (d16, An)
+	{
+		int16_t disp = FetchNextOperationWord();
+		return { EffectiveAddressType::MemoryAlterable, m_regs.a[xn] + int32_t(disp) };
+	}
+
+	case 0b110: // (d8, An, Xn)
+	{
+		uint32_t addr = m_regs.a[xn];
+		const uint16_t briefExtensionWord = FetchNextOperationWord();
+		const bool wordSized = ((briefExtensionWord & 0b00001000'00000000) == 0);
+		addr += int32_t(int8_t(briefExtensionWord & 0xff));
+		const auto& regs = (briefExtensionWord & 0x8000) == 0 ? m_regs.d : m_regs.a;
+		const auto indexReg = (briefExtensionWord & 0b01110000'00000000) >> 12;
+		auto indexValue = regs[indexReg];
+		if (wordSized)
+		{
+			indexValue = SignExtend(indexValue);
+		}
+		addr += indexValue;
+		delay++;
+		return { EffectiveAddressType::MemoryAlterable, addr };
+	}
+
+	case 0b111:
+	{
+		switch (xn)
+		{
+		case 0b000: // (xxx).w
+		{
+			auto addr = SignExtend(FetchNextOperationWord());
+			return { EffectiveAddressType::MemoryAlterable, addr };
+		}
+
+		case 0b001: // (xxx).l
+		{
+			auto addr = uint32_t(FetchNextOperationWord()) << 16;
+			addr |= uint32_t(FetchNextOperationWord());
+			return { EffectiveAddressType::MemoryAlterable, addr };
+		}
+
+		case 0b010: // (d16, pc)
+		{
+			auto addr = m_regs.pc;
+			addr += SignExtend(FetchNextOperationWord());
+			return { EffectiveAddressType::MemorySourceOnly, addr };
+		}
+
+		case 0b011: // (d8, pc, Xn)
+		{
+			uint32_t addr = m_regs.pc;
+			const uint16_t briefExtensionWord = FetchNextOperationWord();
+			const bool wordSized = ((briefExtensionWord & 0b00001000'00000000) == 0);
+			addr += int32_t(int8_t(briefExtensionWord & 0xff));
+			const auto& regs = (briefExtensionWord & 0x8000) == 0 ? m_regs.d : m_regs.a;
+			const auto indexReg = (briefExtensionWord & 0b01110000'00000000) >> 12;
+			auto indexValue = regs[indexReg];
+			if (wordSized)
+			{
+				indexValue = SignExtend(indexValue);
+			}
+			addr += indexValue;
+			delay++;
+			return { EffectiveAddressType::MemorySourceOnly, addr };
+		}
+
+		case 0b100: // #imm
+		{
+			if (size == 0)
+				return { EffectiveAddressType::Bad, };
+
+			uint32_t value = FetchNextOperationWord();
+
+			if (size == 1)
+			{
+				value &= 0xff;
+			}
+			else if (size == 4)
+			{
+				value <<= 16;
+				value |= FetchNextOperationWord();
+			}
+			return { EffectiveAddressType::Immediate, value };
+		}
+
+		default:
+			return { EffectiveAddressType::Bad, };
+
+		}
+	}
+
+	default:
+		return { EffectiveAddressType::Bad, };
+	}
+}
+
+bool M68000::GetEaValue(const EA& ea, int size, uint64_t& value)
+{
+	switch (ea.type)
+	{
+	case EffectiveAddressType::DataRegister:
+		value = GetReg(m_regs.d[ea.addrIdx], size);
+		return true;
+
+	case EffectiveAddressType::AddressRegister:
+		if (size == 1)
+			return false;
+		value = GetReg(m_regs.a[ea.addrIdx], size);
+		return true;
+
+	case EffectiveAddressType::MemoryAlterable:
+	case EffectiveAddressType::MemorySourceOnly:
+		if ((ea.addrIdx & 1) != 0 && size > 1)
+			return false; // unaligned memory access
+		value = ReadBus(ea.addrIdx, size);
+		return true;
+
+	case EffectiveAddressType::Immediate:
+		value = ea.addrIdx;
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+bool M68000::SetEaValue(const EA& ea, int size, uint64_t value)
+{
+	switch (ea.type)
+	{
+	case EffectiveAddressType::DataRegister:
+		SetReg(m_regs.d[ea.addrIdx], size, uint32_t(value));
+		return true;
+
+	case EffectiveAddressType::AddressRegister:
+		if (size == 1)
+			return false;
+		if (size == 2)
+			value = SignExtend(uint16_t(value));
+		m_regs.a[ea.addrIdx] = uint32_t(value);
+		return true;
+
+	case EffectiveAddressType::MemoryAlterable:
+		if ((ea.addrIdx & 1) != 0 && size > 1)
+			return false; // unaligned memory access
+		WriteBus(ea.addrIdx, size, uint32_t(value));
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+bool M68000::ExecuteOneInstruction(int& delay)
+{
+	bool result = false;
+	delay = 0;
+
+	if (m_currentInstructionIndex == ~0)
+	{
+		// tried to execute a privileged instruction not in supervisor mode.
+		result = StartInternalException(8);
+	}
+	else if (m_currentInstructionIndex < kNumOpcodeEntries)
+	{
+		result = std::invoke(OpcodeFunction[m_currentInstructionIndex], *this, delay);
+	}
+	else
+	{
+		// illegal instruction.
+		result = StartInternalException(4);
+	}
+
+	// For unimplemented opcodes, freeze the CPU at the unimplemented opcode.
+	if (result == false)
+	{
+		m_executeState = ExecuteState::Stopped;
+		m_regs.pc = m_operationAddr;
+		delay = 0;
+	}
+	else
+	{
+		m_executeState = ExecuteState::ReadyToDecode;
+	}
+
+	return result;
+}
+
+bool M68000::StartInternalException(uint8_t vectorNum)
+{
+	// * Switches to supervisor mode if not already in it
+	// * Pushes pc and status to the stack
+	// * Sets pc to address at exception vector index specified
+
+	uint16_t status = m_regs.status;
+	SetStatusRegister(m_regs.status | 0x2000);
+	auto& sp = m_regs.a[7];
+
+	// Push current PC to stack
+	sp -= 4;
+	WriteBusLong(sp, m_regs.pc);
+
+	// Push current status register to stack
+	sp -= 2;
+	m_bus->WriteBusWord(sp, status);
+
+	m_regs.pc = ReadBusLong(uint32_t(vectorNum) * 4);
+	return true;
+}
+
+void M68000::SetStatusRegister(uint16_t value)
+{
+	if (((m_regs.status ^ value) & 0x2000) != 0)
+	{
+		// supervisor mode status has flipped. Swap the USP & SSP
+		std::swap(m_regs.a[7], m_regs.altA7);
+	}
+
+	m_regs.status = value;
+}
+
+void M68000::SetFlag(uint16_t flag, bool condition)
+{
+	if (condition)
+	{
+		m_regs.status |= flag;
+	}
+	else
+	{
+		m_regs.status &= ~flag;
+	}
+}
+
+bool M68000::UnimplementOpcode(int& delay)
+{
+	return false;
+}
+
+bool M68000::Opcode_lea(int& delay)
+{
+	const int r = (m_operation & 0b00001110'00000000) >> 9;
+	m_regs.a[r] = m_ea[0].addrIdx;
+
+	if (m_ea[0].mode == 0b110) // d(An,ix)
+	{
+		delay += 2;
+	}
+	else if (m_ea[0].mode == 0b111 && m_ea[0].xn == 0b011) // d(PC,ix)
+	{
+		delay += 2;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_move(int& delay)
+{
+	uint64_t value;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
+		return false;
+
+	if (!SetEaValue(m_ea[1], m_opcodeSize, value))
+		return false;
+
+	if (m_ea[1].type != EffectiveAddressType::AddressRegister)
+	{
+		const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+		const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+
+		SetFlag(Zero, (value & mask) == 0);
+		SetFlag(Negative, (value & msb) != 0);
+		SetFlag(Overflow | Carry, false);
+	}
+	return true;
+}

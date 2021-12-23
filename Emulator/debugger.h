@@ -29,6 +29,7 @@ namespace guru
 		std::unique_ptr<am::Disassembler> m_disassembler;
 
 		std::vector<std::string> m_instructions;
-		uint32_t m_pc = 0;
+
+		am::Amiga* m_amiga;
 	};
 }
