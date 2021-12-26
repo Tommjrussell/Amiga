@@ -280,31 +280,36 @@ bool am::Amiga::DoOneTick()
 	bool running = true;
 	bool chipBusBusy = false;
 
-	if (CpuReady())
+	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode && CpuReady())
 	{
-		running = m_m68000->Execute(m_cpuBusyTimer);
+		running = m_m68000->DecodeOneInstruction(m_cpuBusyTimer);
 	}
 
-	if (m_cpuBusyTimer > 0)
-	{
-		m_cpuBusyTimer--;
-	}
-	else
+	if (m_cpuBusyTimer == 0)
 	{
 		if (m_exclusiveBusRws > 0)
 		{
 			m_exclusiveBusRws--;
-			m_cpuBusyTimer = 2;
+			m_cpuBusyTimer = 1;
 		}
 		else if (m_sharedBusRws > 0)
 		{
 			if (!chipBusBusy)
 			{
 				m_sharedBusRws--;
-				m_cpuBusyTimer = 2;
+				m_cpuBusyTimer = 1;
 				chipBusBusy = true;
 			}
 		}
+	}
+	else
+	{
+		m_cpuBusyTimer--;
+	}
+
+	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToExecute && CpuReady())
+	{
+		running = m_m68000->ExecuteOneInstruction(m_cpuBusyTimer);
 	}
 
 	m_totalCClocks++;

@@ -97,20 +97,6 @@ namespace cpu
 			return (m_regs.status & 0x2000) != 0;
 		}
 
-		bool Execute(int& delay)
-		{
-			switch (m_executeState)
-			{
-			case ExecuteState::ReadyToDecode:
-				return DecodeOneInstruction(delay);
-			case ExecuteState::ReadyToExecute:
-				return ExecuteOneInstruction(delay);
-			case ExecuteState::Stopped:
-			default:
-				return false;
-			}
-		}
-
 		ExecuteState GetExecutionState() const
 		{
 			return m_executeState;
@@ -125,8 +111,12 @@ namespace cpu
 
 		bool Opcode_lea(int& delay);
 		bool Opcode_move(int& delay);
+		bool Opcode_subq(int& delay);
+		bool Opcode_bcc(int& delay);
 
 	private:
+
+		bool EvaluateCondition(int condition) const;
 
 		bool StartInternalException(uint8_t vectorNum);
 		uint16_t FetchNextOperationWord();

@@ -377,9 +377,9 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	db{cc}    D{reg}, {braDisp}
 	&M68000::UnimplementOpcode,		//	s{cc}     {ea}
 	&M68000::UnimplementOpcode,		//	addq.{s}  {q}, {ea}
-	&M68000::UnimplementOpcode,		//	subq.{s}  {q}, {ea}
+	&M68000::Opcode_subq,			//	subq.{s}  {q}, {ea}
 	&M68000::UnimplementOpcode,		//	bsr     {disp}
-	&M68000::UnimplementOpcode,		//	b{cc}     {disp}
+	&M68000::Opcode_bcc,			//	b{cc}     {disp}
 	&M68000::UnimplementOpcode,		//	moveq   {data}, D{REG}
 	&M68000::UnimplementOpcode,		//	divu    {ea:w}, D{REG}
 	&M68000::UnimplementOpcode,		//	divs    {ea:w}, D{REG}
@@ -905,6 +905,61 @@ void M68000::SetFlag(uint16_t flag, bool condition)
 	}
 }
 
+bool M68000::EvaluateCondition(int condition) const
+{
+	switch (condition)
+	{
+	case 0b0000: // True
+		return true;
+
+	case 0b0001: // False
+		return false;
+
+	case 0b0010: // Higher (HI)
+		return ((m_regs.status & (Carry | Zero)) == 0);
+
+	case 0b0011: // Lower or Same (LS)
+		return ((m_regs.status & (Carry | Zero)) != 0);
+
+	case 0b0100: // Carry Clear (CC)
+		return ((m_regs.status & Carry) == 0);
+
+	case 0b0101: // Carry Set (CS)
+		return ((m_regs.status & Carry) != 0);
+
+	case 0b0110: // Not Equal (NE)
+		return ((m_regs.status & Zero) == 0);
+
+	case 0b0111: // Equal (EQ)
+		return ((m_regs.status & Zero) != 0);
+
+	case 0b1000: // Overflow Clear (VC)
+		return ((m_regs.status & Overflow) == 0);
+
+	case 0b1001: // Overflow Set (VS)
+		return ((m_regs.status & Overflow) != 0);
+
+	case 0b1010: // Plus (PL)
+		return ((m_regs.status & Negative) == 0);
+
+	case 0b1011: // Minus (MI)
+		return ((m_regs.status & Negative) != 0);
+
+	case 0b1100: // Greater or Equal (GE)
+		return ((m_regs.status & (Negative | Overflow)) == (Negative | Overflow) || (m_regs.status & (Negative | Overflow)) == 0);
+
+	case 0b1101: // Less Than (LT)
+		return ((m_regs.status & (Negative | Overflow)) == Negative || (m_regs.status & (Negative | Overflow)) == Overflow);
+
+	case 0b1110: // Greater Than (GT)
+		return ((m_regs.status & (Negative | Overflow | Zero)) == (Negative | Overflow) || (m_regs.status & (Negative | Overflow | Zero)) == 0);
+
+	case 0b1111: // Less or Equal (LE)
+	default:
+		return ((m_regs.status & Zero) == Zero || (m_regs.status & (Negative | Overflow)) == Negative || (m_regs.status & (Negative | Overflow)) == Overflow);
+	}
+}
+
 bool M68000::UnimplementOpcode(int& delay)
 {
 	return false;
@@ -945,5 +1000,89 @@ bool M68000::Opcode_move(int& delay)
 		SetFlag(Negative, (value & msb) != 0);
 		SetFlag(Overflow | Carry, false);
 	}
+	return true;
+}
+
+bool M68000::Opcode_subq(int& delay)
+{
+	if (m_ea[0].type == EffectiveAddressType::AddressRegister)
+	{
+		if (m_opcodeSize == 1)
+			return false; // cannot do byte-size subq on address register
+
+		// From PRM: "When subtracting from address registers, the entire destination address register is used,
+		// despite the operation size."
+		m_opcodeSize = 4;
+
+		delay += 2;
+	}
+	else if (m_ea[0].type == EffectiveAddressType::DataRegister && m_opcodeSize == 4)
+	{
+		delay += 2;
+	}
+
+	uint64_t value;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
+		return false;
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	const auto signBefore = value & msb;
+
+	auto subValue = (m_operation & 0b00001110'00000000) >> 9;
+	if (subValue == 0)
+		subValue = 8;
+
+	value -= subValue;
+
+	if (m_ea[0].type != EffectiveAddressType::AddressRegister)
+	{
+		const auto signAfter = value & msb;
+		SetFlag(Zero, (value & mask) == 0);
+		SetFlag(Negative, signAfter != 0);
+		SetFlag(Overflow, signBefore != 0 && signAfter == 0);
+		SetFlag(Carry | Extend, (value & (msb << 1)) != 0);
+	}
+
+	if (!SetEaValue(m_ea[0], m_opcodeSize, value))
+		return false;
+
+	return true;
+}
+
+bool M68000::Opcode_bcc(int& delay)
+{
+	int condition = (m_operation & 0b00001111'00000000) >> 8;
+	int32_t internalDisp = m_operation & 0x00ff;
+
+	if (EvaluateCondition(condition))
+	{
+		int32_t displacement;
+
+		if (internalDisp == 0)
+		{
+			displacement = SignExtend(m_bus->ReadBusWord(m_regs.pc));
+		}
+		else
+		{
+			m_bus->ReadBusWord(m_regs.pc); // read next instruction (result not used but register the bus usage)
+			displacement = internalDisp;
+			displacement <<= 24;
+			displacement >>= 24;
+		}
+		delay++;
+		m_regs.pc = m_regs.pc + displacement;
+	}
+	else
+	{
+		if (internalDisp == 0)
+		{
+			m_regs.pc += 2;
+			delay = 2;
+		}
+		delay += 2;
+	}
+
 	return true;
 }
