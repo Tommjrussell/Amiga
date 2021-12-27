@@ -57,6 +57,8 @@ namespace am
 		bool ExecuteOneCpuInstruction();
 		bool ExecuteToEndOfCpuInstruction();
 
+		void Reset();
+
 		const cpu::M68000* GetCpu() const
 		{
 			return m_m68000.get();

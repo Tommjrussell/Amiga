@@ -428,6 +428,9 @@ M68000::M68000(IBus* bus)
 
 void M68000::Reset(int& delay)
 {
+	m_operationHistory.fill(-1);
+	m_operationHistoryPtr = 0;
+
 	m_executeState = ExecuteState::ReadyToDecode;
 	memset(&m_regs, 0, sizeof(Registers));
 	m_regs.a[7] = m_bus->ReadBusWord(0x0000);
@@ -443,6 +446,9 @@ bool M68000::DecodeOneInstruction(int& delay)
 	m_executeState = ExecuteState::ReadyToExecute;
 
 	m_operationAddr = m_regs.pc;
+
+	m_operationHistory[m_operationHistoryPtr] = m_regs.pc;
+	m_operationHistoryPtr = (m_operationHistoryPtr + 1) % m_operationHistory.size();
 
 	m_operation = FetchNextOperationWord();
 

@@ -136,6 +136,13 @@ bool guru::Debugger::Draw()
 			m_instructions.clear();
 		}
 
+		ImGui::SameLine();
+		if (ImGui::Button("Reset"))
+		{
+			m_amiga->Reset();
+			m_instructions.clear();
+		}
+
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 	}
@@ -150,17 +157,7 @@ bool guru::Debugger::Draw()
 
 		if (m_instructions.empty())
 		{
-			auto pc = m_amiga->GetCpu()->GetPC();
-			m_disassembler->pc = pc;
-			auto end = pc + 128;
-
-			while (m_disassembler->pc < end)
-			{
-				std::string line = HexToString(m_disassembler->pc);
-				line += (m_disassembler->pc == pc) ? " > " : " : ";
-				line += m_disassembler->Disassemble();
-				m_instructions.emplace_back(line);
-			}
+			UpdateAssembly();
 		}
 
 		for (auto&l : m_instructions)
@@ -174,4 +171,35 @@ bool guru::Debugger::Draw()
 
 	ImGui::End();
 	return open;
+}
+
+void guru::Debugger::UpdateAssembly()
+{
+	auto cpu = m_amiga->GetCpu();
+	auto pc = cpu->GetPC();
+
+	auto[history, ptr] = cpu->GetOperationHistory();
+
+	uint32_t earliestAddr = pc;
+
+	// Look for the earliest recently previously-executed instruction that
+	// is not more than 32 bytes earlier than the current pc
+
+	for (int i = 0; i < history.size(); i++)
+	{
+		if (history[i] < earliestAddr && (history[i] + 32) >= pc)
+		{
+			earliestAddr = history[i];
+		}
+	}
+
+	m_disassembler->pc = earliestAddr;
+
+	for (int lines = 0; lines < 48; lines++)
+	{
+		std::string line = HexToString(m_disassembler->pc);
+		line += (m_disassembler->pc == pc) ? " > " : " : ";
+		line += m_disassembler->Disassemble();
+		m_instructions.emplace_back(line);
+	}
 }

@@ -25,6 +25,10 @@ namespace guru
 
 	private:
 
+		void UpdateAssembly();
+
+	private:
+
 		std::unique_ptr<DebuggerMemoryInterface> m_memory;
 		std::unique_ptr<am::Disassembler> m_disassembler;
 

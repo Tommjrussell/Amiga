@@ -316,3 +316,16 @@ bool am::Amiga::DoOneTick()
 
 	return running;
 }
+
+void am::Amiga::Reset()
+{
+	::memset(m_chipRam.data(), 0, m_chipRam.size());
+	::memset(m_slowRam.data(), 0, m_slowRam.size());
+
+	m_sharedBusRws = 0;
+	m_exclusiveBusRws = 0;
+	m_m68000->Reset(m_cpuBusyTimer);
+	m_totalCClocks = 0;
+
+	m_romOverlayEnabled = true;
+}

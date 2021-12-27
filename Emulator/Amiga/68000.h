@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <array>
 
 namespace cpu
 {
@@ -105,6 +106,11 @@ namespace cpu
 		bool DecodeOneInstruction(int& delay);
 		bool ExecuteOneInstruction(int& delay);
 
+		std::pair<const std::array<uint32_t, 32>&, uint32_t> GetOperationHistory() const
+		{
+			return std::make_pair(m_operationHistory, m_operationHistoryPtr);
+		}
+
 	private:
 
 		bool UnimplementOpcode(int& delay);
@@ -164,6 +170,9 @@ namespace cpu
 		uint8_t m_opcodeSize = 0;
 
 		EA m_ea[2];
+
+		std::array<uint32_t, 32> m_operationHistory;
+		uint32_t m_operationHistoryPtr;
 
 		typedef bool (cpu::M68000::* OpcodeInstruction)(int&);
 		static OpcodeInstruction OpcodeFunction[kNumOpcodeEntries];
