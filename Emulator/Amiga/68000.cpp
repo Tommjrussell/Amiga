@@ -585,7 +585,7 @@ uint32_t M68000::ReadBusLong(uint32_t addr)
 {
 	uint32_t value = m_bus->ReadBusWord(addr);
 	value <<= 16;
-	value = m_bus->ReadBusWord(addr + 2);
+	value |= m_bus->ReadBusWord(addr + 2);
 	return value;
 }
 
