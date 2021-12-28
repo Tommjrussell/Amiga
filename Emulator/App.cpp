@@ -10,6 +10,12 @@
 #include <memory>
 #include <filesystem>
 
+namespace
+{
+	constexpr int PAL_CClockFreq = 3546895;
+	constexpr int NTSC_CClockFreq = 3579545;
+}
+
 guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
 {
 	std::vector<uint8_t> rom;
@@ -20,15 +26,43 @@ guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
 	}
 	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom));
 
-	m_debugger = std::make_unique<Debugger>(m_amiga.get());
+	m_debugger = std::make_unique<Debugger>(this, m_amiga.get());
 }
 
 guru::AmigaApp::~AmigaApp()
 {
 }
 
+void guru::AmigaApp::SetRunning(bool running)
+{
+	if (m_isRunning == running)
+		return;
+
+	m_isStarting = running;
+	m_isRunning = running;
+}
+
 bool guru::AmigaApp::Update()
 {
+	if (m_isStarting)
+	{
+		m_last = std::chrono::high_resolution_clock::now();
+		m_isStarting = false;
+	}
+	else if (m_isRunning)
+	{
+		auto now = std::chrono::high_resolution_clock::now();
+
+		std::chrono::duration<double> diff = now - m_last;
+		m_last = now;
+
+		if (diff < std::chrono::duration < double>(0.5))
+		{
+			const int cclks = int(std::round((diff * PAL_CClockFreq).count()));
+			m_isRunning = m_amiga->ExecuteFor(cclks);
+		}
+	}
+
 	return !m_isQuitting;
 }
 

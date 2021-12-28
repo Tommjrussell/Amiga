@@ -1,5 +1,7 @@
 #include "debugger.h"
 
+#include "App.h"
+
 #include "amiga/disassembler.h"
 #include "amiga/amiga.h"
 #include "amiga/68000.h"
@@ -33,8 +35,9 @@ namespace guru
 	};
 }
 
-guru::Debugger::Debugger(am::Amiga* amiga)
-	: m_amiga(amiga)
+guru::Debugger::Debugger(guru::AmigaApp* app, am::Amiga* amiga)
+	: m_app(app)
+	, m_amiga(amiga)
 {
 	m_memory = std::make_unique<DebuggerMemoryInterface>(amiga);
 	m_disassembler = std::make_unique<am::Disassembler>(m_memory.get());
@@ -46,6 +49,28 @@ guru::Debugger::~Debugger()
 
 bool guru::Debugger::Draw()
 {
+	auto ActiveButton = [](const char* name, bool active, const ImVec2& size = ImVec2(0, 0)) -> bool
+	{
+		if (!active)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(128, 128, 128, 255));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(128, 128, 128, 255));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(128, 128, 128, 255));
+			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.6f);
+		}
+
+		auto ret = ImGui::Button(name, size);
+
+		if (!active)
+		{
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor(3);
+		}
+
+		return active && ret;
+	};
+
+
 	bool open = true;
 	ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
 	bool expanded = ImGui::Begin("Debugger", &open);
@@ -57,6 +82,7 @@ bool guru::Debugger::Draw()
 	}
 
 	auto regs = m_amiga->GetCpu()->GetRegisters();
+	const bool running = m_app->IsRunning();
 
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
@@ -130,15 +156,44 @@ bool guru::Debugger::Draw()
 		ImGui::EndChild();
 		ImGui::PopStyleVar(2);
 
-		if (ImGui::Button("Step"))
+		if (ActiveButton("Start", !running))
 		{
+			m_amiga->ClearBreakpoint();
+			m_app->SetRunning(true);
+			m_instructions.clear();
+		}
+
+		ImGui::SameLine();
+		if (ActiveButton("Stop", running))
+		{
+			m_app->SetRunning(false);
+			m_amiga->ClearBreakpoint();
+		}
+
+		ImGui::SameLine();
+		if (ActiveButton("Step", !running))
+		{
+			m_amiga->ClearBreakpoint();
 			m_amiga->ExecuteOneCpuInstruction();
+			m_instructions.clear();
+		}
+
+
+		ImGui::SameLine();
+		if (ActiveButton("Step Over", !running))
+		{
+			// Use the disassembler to calculate the length of the next instruction
+			m_disassembler->pc = regs.pc;
+			m_disassembler->Disassemble(); // ignore disassembled string
+			m_amiga->SetBreakpoint(m_disassembler->pc);
+			m_app->SetRunning(true);
 			m_instructions.clear();
 		}
 
 		ImGui::SameLine();
 		if (ImGui::Button("Reset"))
 		{
+			m_amiga->ClearBreakpoint();
 			m_amiga->Reset();
 			m_instructions.clear();
 		}
@@ -155,14 +210,21 @@ bool guru::Debugger::Draw()
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
 		ImGui::BeginChild("Child_Disassembly", ImVec2(0, 0), true, 0);
 
-		if (m_instructions.empty())
+		if (m_app->IsRunning())
 		{
-			UpdateAssembly();
+			ImGui::Text("<< RUNNING >>");
 		}
-
-		for (auto&l : m_instructions)
+		else
 		{
-			ImGui::Text(l.c_str());
+			if (m_instructions.empty())
+			{
+				UpdateAssembly();
+			}
+
+			for (auto&l : m_instructions)
+			{
+				ImGui::Text(l.c_str());
+			}
 		}
 
 		ImGui::EndChild();

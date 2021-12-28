@@ -291,9 +291,9 @@ namespace guru
 		{
 			renderer.SetScreenImage(screen.get());
 
-			appRunning = app.Update();
-
 			glfwPollEvents();
+
+			appRunning = app.Update();
 
 			renderer.NewFrame();
 			app.Render();

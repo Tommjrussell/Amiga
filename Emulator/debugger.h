@@ -13,12 +13,13 @@ namespace am
 
 namespace guru
 {
+	class AmigaApp;
 	class DebuggerMemoryInterface;
 
 	class Debugger
 	{
 	public:
-		explicit Debugger(am::Amiga* amiga);
+		explicit Debugger(guru::AmigaApp* app, am::Amiga* amiga);
 		~Debugger();
 
 		bool Draw();
@@ -34,6 +35,7 @@ namespace guru
 
 		std::vector<std::string> m_instructions;
 
+		guru::AmigaApp* m_app;
 		am::Amiga* m_amiga;
 	};
 }

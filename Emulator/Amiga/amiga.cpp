@@ -34,6 +34,17 @@ void am::Amiga::SetPC(uint32_t pc)
 	m_m68000->SetPC(pc);
 }
 
+void am::Amiga::SetBreakpoint(uint32_t addr)
+{
+	m_breakpoint = addr;
+	m_breakpointEnabled = true;
+}
+
+void am::Amiga::ClearBreakpoint()
+{
+	m_breakpointEnabled = false;
+}
+
 uint8_t am::Amiga::PeekByte(uint32_t addr) const
 {
 	auto [type, mem] = const_cast<Amiga*>(this)->GetMappedMemory(addr);
@@ -234,7 +245,7 @@ bool am::Amiga::ExecuteFor(uint64_t cclocks)
 	{
 		running = DoOneTick();
 	}
-	return true;
+	return running;
 }
 
 bool am::Amiga::ExecuteOneCpuInstruction()
@@ -282,6 +293,9 @@ bool am::Amiga::DoOneTick()
 
 	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode && CpuReady())
 	{
+		if (m_breakpointEnabled && m_m68000->GetPC() == m_breakpoint)
+			return false;
+
 		running = m_m68000->DecodeOneInstruction(m_cpuBusyTimer);
 	}
 

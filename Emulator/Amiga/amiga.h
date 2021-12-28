@@ -66,6 +66,9 @@ namespace am
 
 		void SetPC(uint32_t pc);
 
+		void SetBreakpoint(uint32_t addr);
+		void ClearBreakpoint();
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;
@@ -88,6 +91,9 @@ namespace am
 		std::vector<uint8_t> m_slowRam;
 
 		bool m_romOverlayEnabled = true;
+		bool m_breakpointEnabled = false;
+
+		uint32_t m_breakpoint  = 0;
 
 		uint32_t m_sharedBusRws = 0;
 		uint32_t m_exclusiveBusRws = 0;
