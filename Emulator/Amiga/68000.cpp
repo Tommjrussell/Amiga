@@ -333,7 +333,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	eori    {imm:b}, CCR
 	&M68000::UnimplementOpcode,		//	eori    {imm:w}, SR
 	&M68000::UnimplementOpcode,		//	eori.{s}  {imm}, {ea}
-	&M68000::UnimplementOpcode,		//	cmpi.{s}  {imm}, {ea}
+	&M68000::Opcode_cmpi,			//	cmpi.{s}  {imm}, {ea}
 	&M68000::UnimplementOpcode,		//	btst    {imm:b}, {ea}
 	&M68000::UnimplementOpcode,		//	b(chg/clr/set)    {imm:b}, {ea}
 	&M68000::UnimplementOpcode,		//	movep.{wl} ({immDis16}, A{reg}), D{REG}
@@ -390,7 +390,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	subx.{s}  {m}
 	&M68000::UnimplementOpcode,		//	sub.{s}   {ea}, D{REG}
 	&M68000::UnimplementOpcode,		//	sub.{s}   D{REG}, {ea}
-	&M68000::UnimplementOpcode,		//	cmpa.{WL}  {ea}, A{REG}
+	&M68000::Opcode_cmpa,			//	cmpa.{WL}  {ea}, A{REG}
 	&M68000::UnimplementOpcode,		//	cmpm.{s}  A{reg}+, A{REG}+
 	&M68000::UnimplementOpcode,		//	cmp.{s}   {ea}, D{REG}
 	&M68000::UnimplementOpcode,		//	eor.{s}   D{REG}, {ea}
@@ -1088,6 +1088,63 @@ bool M68000::Opcode_bcc(int& delay)
 			delay = 2;
 		}
 		delay += 2;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_cmpa(int& delay)
+{
+	auto reg = (m_operation & 0b00001110'00000000) >> 9;
+	uint64_t destValue = m_regs.a[reg];
+
+	uint64_t srcValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, srcValue))
+		return false;
+
+	if (m_opcodeSize == 2)
+	{
+		srcValue = SignExtend(uint16_t(srcValue));
+	}
+
+	uint64_t result = destValue - srcValue;
+
+	const uint64_t mask = 0xffffffff;
+	const uint64_t msb = 0x8000000;
+
+	const auto signBefore = destValue & msb;
+	const auto signAfter = result & msb;
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, signAfter != 0);
+	SetFlag(Overflow, ((signBefore ^ (srcValue & msb)) != 0) && (signBefore != signAfter));
+	SetFlag(Carry, (result & (msb << 1)) != 0);
+
+	delay += 1;
+
+	return true;
+}
+
+bool M68000::Opcode_cmpi(int& delay)
+{
+	uint64_t destValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, destValue))
+		return false;
+
+	uint64_t result = destValue - m_immediateValue;
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	const auto signBefore = destValue & msb;
+	const auto signAfter = result & msb;
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, signAfter != 0);
+	SetFlag(Overflow, ((m_immediateValue & msb) != signBefore) && (signBefore != signAfter));
+	SetFlag(Carry, (result & (msb << 1)) != 0);
+
+	if (m_opcodeSize == 4)
+	{
+		delay += 1;
 	}
 
 	return true;
