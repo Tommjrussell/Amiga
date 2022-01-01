@@ -374,7 +374,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	movem.{wl} {ea}, {list}
 	&M68000::Opcode_lea,			//	lea     {ea}, A{REG}
 	&M68000::UnimplementOpcode,		//	chk     {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	db{cc}    D{reg}, {braDisp}
+	&M68000::Opcode_dbcc,			//	db{cc}    D{reg}, {braDisp}
 	&M68000::UnimplementOpcode,		//	s{cc}     {ea}
 	&M68000::UnimplementOpcode,		//	addq.{s}  {q}, {ea}
 	&M68000::Opcode_subq,			//	subq.{s}  {q}, {ea}
@@ -1059,7 +1059,7 @@ bool M68000::Opcode_subq(int& delay)
 
 bool M68000::Opcode_bcc(int& delay)
 {
-	int condition = (m_operation & 0b00001111'00000000) >> 8;
+	const int condition = (m_operation & 0b00001111'00000000) >> 8;
 	int32_t internalDisp = m_operation & 0x00ff;
 
 	if (EvaluateCondition(condition))
@@ -1078,7 +1078,7 @@ bool M68000::Opcode_bcc(int& delay)
 			displacement >>= 24;
 		}
 		delay++;
-		m_regs.pc = m_regs.pc + displacement;
+		m_regs.pc += displacement;
 	}
 	else
 	{
@@ -1145,6 +1145,36 @@ bool M68000::Opcode_cmpi(int& delay)
 	if (m_opcodeSize == 4)
 	{
 		delay += 1;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_dbcc(int& delay)
+{
+	const int condition = (m_operation & 0b00001111'00000000) >> 8;
+
+	if (EvaluateCondition(condition))
+	{
+		delay = 2;
+	}
+	else
+	{
+		delay = 1;
+		const auto branchAddr = (m_regs.pc - 2) + SignExtend(m_immediateValue);
+		const int reg = m_operation & 0b111;
+		const auto val = (m_regs.d[reg] - 1) & 0xffff;
+		m_regs.d[reg] &= 0xffff0000;
+		m_regs.d[reg] |= val;
+
+		if (val != 0xffff)
+		{
+			m_regs.pc = branchAddr;
+		}
+		else
+		{
+			m_bus->ReadBusWord(branchAddr); // Read but ignored (branch not taken).
+		}
 	}
 
 	return true;

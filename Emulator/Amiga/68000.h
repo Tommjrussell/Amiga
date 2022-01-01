@@ -121,6 +121,7 @@ namespace cpu
 		bool Opcode_bcc(int& delay);
 		bool Opcode_cmpa(int& delay);
 		bool Opcode_cmpi(int& delay);
+		bool Opcode_dbcc(int& delay);
 
 	private:
 

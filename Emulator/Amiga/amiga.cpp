@@ -365,17 +365,18 @@ void am::Amiga::Reset()
 	::memset(m_chipRam.data(), 0, m_chipRam.size());
 	::memset(m_slowRam.data(), 0, m_slowRam.size());
 
-	m_sharedBusRws = 0;
-	m_exclusiveBusRws = 0;
-	m_m68000->Reset(m_cpuBusyTimer);
-	m_totalCClocks = 0;
-
 	ResetCIA(0);
 	ResetCIA(1);
 
 	// Enable ROM overlay
 	m_cia[0].pra |= 0x01;
 	m_romOverlayEnabled = true;
+
+	m_sharedBusRws = 0;
+	m_exclusiveBusRws = 0;
+	m_totalCClocks = 0;
+
+	m_m68000->Reset(m_cpuBusyTimer);
 }
 
 void am::Amiga::ResetCIA(int num)
