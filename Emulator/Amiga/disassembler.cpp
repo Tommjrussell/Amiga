@@ -242,7 +242,7 @@ namespace
 
 				for (int i = 0; i < std::size(codeStrings); i++)
 				{
-					if (strncmp(start, codeStrings[i], len) == 0)
+					if (strncmp(start, codeStrings[i], len) == 0 && codeStrings[i][len] == '\0')
 					{
 						p.code = CodeType(i);
 						break;

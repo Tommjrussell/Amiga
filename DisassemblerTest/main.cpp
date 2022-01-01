@@ -1,4 +1,4 @@
-﻿#include "disassembler.h"
+﻿#include "../Emulator/amiga/disassembler.h"
 
 #include <vector>
 #include <iostream>
@@ -6,7 +6,7 @@
 #include <initializer_list>
 #include <stdint.h>
 
-struct MachineCode : public am::Memory
+struct MachineCode : public am::IMemory
 {
 	MachineCode(std::initializer_list<uint16_t> code)
 	{
@@ -51,6 +51,7 @@ int main()
 {
 	MachineCode m
 	{
+		0x0cb8, 0x4845, 0x4c50, 0x0000, // cmpi.l $48454c50, (0000).w
 		0x1029, 0x001f,		// move.b ($001f, A1), D0
 		0x532e, 0x0126,		// subq.b $01, ($0126, A6)
 		0x4880,				// ext.w D0
