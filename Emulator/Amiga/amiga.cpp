@@ -208,6 +208,21 @@ uint8_t am::Amiga::ReadBusByte(uint32_t addr)
 	}
 	else
 	{
+		if (type == Mapped::Cia)
+		{
+			if ((addr & 0xe03001) == 0xa02001) // CIAA
+			{
+				const auto port = (addr >> 8) & 0xf;
+				return ReadCIA(0, port);
+			}
+
+			if ((addr & 0xe03001) == 0xa01000) // CIAB
+			{
+				const auto port = (addr >> 8) & 0xf;
+				return ReadCIA(1, port);
+			}
+		}
+
 		// TODO : implement register/peripheral access
 		return 0;
 	}
@@ -231,6 +246,20 @@ void am::Amiga::WriteBusByte(uint32_t addr, uint8_t value)
 	}
 	else
 	{
+		if (type == Mapped::Cia)
+		{
+			if ((addr & 0xe03001) == 0xa02001) // CIAA
+			{
+				auto port = (addr >> 8) & 0xf;
+				WriteCIA(0, port, value);
+			}
+			else if ((addr & 0xe03001) == 0xa01000) // CIAB
+			{
+				auto port = (addr >> 8) & 0xf;
+				WriteCIA(1, port, value);
+			}
+		}
+
 		// TODO : implement register/peripheral access
 	}
 }
@@ -341,5 +370,80 @@ void am::Amiga::Reset()
 	m_m68000->Reset(m_cpuBusyTimer);
 	m_totalCClocks = 0;
 
+	ResetCIA(0);
+	ResetCIA(1);
+
+	// Enable ROM overlay
+	m_cia[0].pra |= 0x01;
 	m_romOverlayEnabled = true;
+}
+
+void am::Amiga::ResetCIA(int num)
+{
+	auto& cia = m_cia[num];
+	cia.pra = 0;
+	cia.prb = 0;
+	cia.ddra = 0;
+	cia.ddrb = 0;
+}
+
+void am::Amiga::WriteCIA(int num, int port, uint8_t data)
+{
+	auto& cia = m_cia[num];
+
+	switch (port)
+	{
+	case 0x0: // pra
+	{
+		cia.pra &= ~cia.ddra;
+		cia.pra |= data & cia.ddra;
+
+		if (num == 0)
+		{
+			// For convenience, mirror the state if the ROM overlay bit in this bool variable
+			m_romOverlayEnabled = (cia.pra & 0x01) != 0;
+		}
+
+	}	break;
+
+	case 0x1: // prb
+	{
+		cia.prb &= ~cia.ddrb;
+		cia.prb |= data & cia.ddrb;
+	}	break;
+
+	case 0x2: // ddra
+		cia.ddra = data;
+		break;
+
+	case 0x3: // ddrb
+		cia.ddrb = data;
+		break;
+
+	default:
+		// TODO : other registers
+		break;
+
+	}
+}
+
+uint8_t am::Amiga::ReadCIA(int num, int port)
+{
+	auto& cia = m_cia[num];
+
+	switch (port)
+	{
+	case 0x0:
+		return cia.pra;
+	case 0x1:
+		return cia.prb;
+	case 0x2:
+		return cia.ddra;
+	case 0x3:
+		return cia.ddrb;
+
+	default:
+		// TODO : other registers
+		return 0;
+	}
 }

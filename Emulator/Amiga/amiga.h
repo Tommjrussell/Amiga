@@ -85,6 +85,20 @@ namespace am
 
 		bool DoOneTick();
 
+		void ResetCIA(int num);
+		void WriteCIA(int num, int port, uint8_t data);
+		uint8_t ReadCIA(int num, int port);
+
+	private:
+
+		struct CIA
+		{
+			uint8_t pra;
+			uint8_t prb;
+			uint8_t ddra;
+			uint8_t ddrb;
+		};
+
 	private:
 		std::vector<uint8_t> m_rom;
 		std::vector<uint8_t> m_chipRam;
@@ -100,6 +114,8 @@ namespace am
 
 		uint64_t m_totalCClocks = 0;
 		int m_cpuBusyTimer = 0;
+
+		CIA m_cia[2];
 
 		std::unique_ptr<cpu::M68000> m_m68000;
 	};

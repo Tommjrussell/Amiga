@@ -513,6 +513,7 @@ std::string am::Disassembler::Disassemble()
 			{
 				const int16_t displacement = int16_t(m_memory->GetWord(pc));
 				const uint32_t target = pc + displacement;
+				pc += 2;
 				const auto count = sprintf_s(buffptr, charsLeft, "%hi -> $%08x", displacement, target);
 				buffptr += count;
 				charsLeft -= count;
