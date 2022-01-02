@@ -86,7 +86,7 @@ std::tuple<am::Mapped, uint8_t*> am::Amiga::GetMappedMemory(uint32_t addr)
 		return { Mapped::Rom, m_rom.data() + addr };
 	}
 
-	if (addr < 0x20'000)
+	if (addr < 0x20'0000)
 	{
 		// Up to 2Mib of chip ram. If less than 2Mib is present,
 		// the higher addresses mirror the lower.
