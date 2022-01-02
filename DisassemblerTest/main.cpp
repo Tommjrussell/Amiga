@@ -51,6 +51,7 @@ int main()
 {
 	MachineCode m
 	{
+		0xe248,							// lsr.w $1,D0
 		0x0cb8, 0x4845, 0x4c50, 0x0000, // cmpi.l $48454c50, (0000).w
 		0x1029, 0x001f,		// move.b ($001f, A1), D0
 		0x532e, 0x0126,		// subq.b $01, ($0126, A6)

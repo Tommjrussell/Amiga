@@ -157,6 +157,7 @@ namespace
 		displacement_data,
 		immediate,
 		register_list,
+		direction,
 
 		CodeType_length
 	};
@@ -181,6 +182,7 @@ namespace
 		"immDisp16",	// displacement_data,
 		"imm",			// immediate
 		"list",			// register_list
+		"R",			// direction
 	};
 
 	enum Sizes
@@ -193,6 +195,8 @@ namespace
 	};
 
 	const char sizeCodes[3] = { 'b', 'w', 'l' };
+
+	const char shiftDir[2] = { 'r', 'l' };
 
 	constexpr int kOperandStartColumn = 10;
 
@@ -559,6 +563,13 @@ std::string am::Disassembler::Disassemble()
 					reversed = true;
 				}
 				WriteRegisterList(regMask, reversed, buffptr, charsLeft);
+			}	break;
+
+			case CodeType::direction:
+			{
+				const auto dir = (instruction & 0b00000001'00000000) >> 8;
+				*buffptr++ = shiftDir[dir];
+				charsLeft--;
 			}	break;
 
 			}
