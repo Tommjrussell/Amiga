@@ -5,7 +5,7 @@
 
 namespace cpu
 {
-	constexpr size_t kNumOpcodeEntries = 94;
+	constexpr size_t kNumOpcodeEntries = 93;
 
 	enum class ExecuteState : int
 	{
@@ -122,6 +122,15 @@ namespace cpu
 		bool Opcode_cmpa(int& delay);
 		bool Opcode_cmpi(int& delay);
 		bool Opcode_dbcc(int& delay);
+		bool Opcode_btst(int& delay);
+		bool Opcode_add(int& delay);
+		bool Opcode_not(int& delay);
+		bool Opcode_suba(int& delay);
+		bool Opcode_adda(int& delay);
+		bool Opcode_tst(int& delay);
+		bool Opcode_cmp(int& delay);
+		bool Opcode_jmp(int& delay);
+		bool Opcode_moveq(int& delay);
 
 	private:
 
