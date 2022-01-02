@@ -236,10 +236,10 @@ namespace
 		{ kSizeVariableNormal, 0 },																				//	addx.{s}  {m}
 		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	add.{s}   {ea}, D{REG}
 		{ kEffectiveAddress1 | kSizeVariableNormal, EA::MemoryAlterable },										//	add.{s}   D{REG}, {ea}
-		{ kEffectiveAddress1, EA::MemoryAlterable },															//	as{R}     {ea}
-		{ kEffectiveAddress1, EA::MemoryAlterable },															//	ls{R}     {ea}
-		{ kEffectiveAddress1, EA::MemoryAlterable },															//	rox{R}    {ea}
-		{ kEffectiveAddress1, EA::MemoryAlterable },															//	ro{R}     {ea}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::MemoryAlterable },											//	as{R}     {ea}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::MemoryAlterable },											//	ls{R}     {ea}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::MemoryAlterable },											//	rox{R}    {ea}
+		{ kSizeFixedWord | kEffectiveAddress1, EA::MemoryAlterable },											//	ro{R}     {ea}
 		{ kSizeVariableNormal, 0 },																				//	as{R}.{s}   {q}, D{reg}
 		{ kSizeVariableNormal, 0 },																				//	ls{R}.{s}   {q}, D{reg}
 		{ kSizeVariableNormal, 0 },																				//	rox{R}.{s}  {q}, D{reg}
@@ -348,7 +348,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_not,			//	not.{s}   {ea}
 	&M68000::UnimplementOpcode,		//	ext.{wl}   D{reg}
 	&M68000::UnimplementOpcode,		//	nbcd    {ea:b}
-	&M68000::UnimplementOpcode,		//	swap    D{reg}
+	&M68000::Opcode_swap,			//	swap    D{reg}
 	&M68000::UnimplementOpcode,		//	pea     {ea:l}
 	&M68000::UnimplementOpcode,		//	tas     {ea:b}
 	&M68000::Opcode_tst,			//	tst.{s}   {ea}
@@ -383,8 +383,8 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	or.{s}    D{REG}, {ea}
 	&M68000::Opcode_suba,			//	suba.{WL}  {ea}, A{REG}
 	&M68000::UnimplementOpcode,		//	subx.{s}  {m}
-	&M68000::UnimplementOpcode,		//	sub.{s}   {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	sub.{s}   D{REG}, {ea}
+	&M68000::Opcode_sub,			//	sub.{s}   {ea}, D{REG}
+	&M68000::Opcode_sub,			//	sub.{s}   D{REG}, {ea}
 	&M68000::Opcode_cmpa,			//	cmpa.{WL}  {ea}, A{REG}
 	&M68000::UnimplementOpcode,		//	cmpm.{s}  A{reg}+, A{REG}+
 	&M68000::Opcode_cmp,			//	cmp.{s}   {ea}, D{REG}
@@ -400,15 +400,15 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_add,			//	add.{s}   {ea}, D{REG}
 	&M68000::Opcode_add,			//	add.{s}   D{REG}, {ea}
 	&M68000::UnimplementOpcode,		//	as{R}     {ea}
-	&M68000::UnimplementOpcode,		//	ls{R}     {ea}
+	&M68000::Opcode_lsd_ea,			//	ls{R}     {ea}
 	&M68000::UnimplementOpcode,		//	rox{R}    {ea}
 	&M68000::UnimplementOpcode,		//	ro{R}     {ea}
 	&M68000::UnimplementOpcode,		//	as{R}.{s}   {q}, D{reg}
-	&M68000::UnimplementOpcode,		//	ls{R}.{s}   {q}, D{reg}
+	&M68000::Opcode_lsd_reg,		//	ls{R}.{s}   {q}, D{reg}
 	&M68000::UnimplementOpcode,		//	rox{R}.{s}  {q}, D{reg}
 	&M68000::UnimplementOpcode,		//	ro{R}.{s}   {q}, D{reg}
 	&M68000::UnimplementOpcode,		//	as{R}.{s}   D{REG}, D{reg}
-	&M68000::UnimplementOpcode,		//	ls{R}.{s}   D{REG}, D{reg}
+	&M68000::Opcode_lsd_reg,		//	ls{R}.{s}   D{REG}, D{reg}
 	&M68000::UnimplementOpcode,		//	rox{R}.{s}  D{REG}, D{reg}
 	&M68000::UnimplementOpcode,		//	ro{R}.{s}   D{REG}, D{reg}
 };
@@ -1362,7 +1362,7 @@ bool M68000::Opcode_tst(int& delay)
 bool M68000::Opcode_cmp(int& delay)
 {
 	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
-	uint64_t destValue = m_regs.d[reg];
+	uint64_t destValue = GetReg(m_regs.d[reg], m_opcodeSize);
 
 	uint64_t srcValue;
 	if (!GetEaValue(m_ea[0], m_opcodeSize, srcValue))
@@ -1417,6 +1417,152 @@ bool M68000::Opcode_moveq(int& delay)
 	SetFlag(Negative, value > 0);
 	SetFlag(Zero, (value == 0));
 	SetFlag(Overflow | Carry, false);
+
+	return true;
+}
+
+bool M68000::Opcode_sub(int& delay)
+{
+	const bool ToEa = (m_operation & 0b00000001'00000000) != 0;
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+
+	const uint64_t regValue = GetReg(m_regs.d[reg], m_opcodeSize);
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	uint64_t result;
+	if (ToEa)
+	{
+		result = eaValue - regValue;
+		SetEaValue(m_ea[0], m_opcodeSize, result);
+	}
+	else
+	{
+		result = regValue - eaValue;
+		SetReg(m_regs.d[reg], m_opcodeSize, uint32_t(result));
+		if (m_opcodeSize == 4)
+		{
+			delay += 1;
+		}
+	}
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	const auto signBefore = regValue & msb;
+	const auto signAfter = result & msb;
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, signAfter != 0);
+	SetFlag(Overflow, ((signBefore ^ (eaValue & msb)) != 0) && (signBefore != signAfter));
+	SetFlag(Carry|Extend, (result & (msb << 1)) != 0);
+
+	return true;
+}
+
+bool M68000::Opcode_lsd_ea(int& delay)
+{
+	const bool toLeft = (m_operation & 0b00000001'00000000) != 0;
+
+	uint64_t value;
+	if (!GetEaValue(m_ea[0], 2, value))
+		return false;
+
+	const uint64_t mask = 0xffff;
+	const uint64_t msb = 0x8000;
+
+	if (toLeft)
+	{
+		SetFlag(Carry | Extend, (value & msb) != 0);
+		value <<= 1;
+	}
+	else
+	{
+		SetFlag(Carry | Extend, (value & 1) != 0);
+		value >>= 1;
+	}
+
+	if (!SetEaValue(m_ea[0], 2, value))
+		return false;
+
+	SetFlag(Negative, (value & msb) != 0);
+	SetFlag(Zero, (value & mask) == 0);
+	SetFlag(Overflow, false);
+
+	return true;
+}
+
+bool M68000::Opcode_lsd_reg(int& delay)
+{
+	const bool toLeft = (m_operation & 0b00000001'00000000) != 0;
+	const bool regSpecifiesCount = (m_operation & 0b00000000'00100000) != 0;
+	int count = (m_operation & 0b00001110'00000000) >> 9;
+	const int reg = m_operation & 0b00000000'00000111;
+
+	uint64_t value = GetReg(m_regs.d[reg], m_opcodeSize);
+
+	if (regSpecifiesCount)
+	{
+		// M68000PRM: The shift count is the value in the data
+		// register specified in the instruction modulo 64.
+		count = m_regs.d[count] & 0x3f;
+	}
+	else if (count == 0)
+	{
+		// M68000PRM: The values 1 – 7 represent shifts of 1 – 7;
+		// value of zero specifies a shift count of eight.
+		count = 8;
+	}
+
+	SetFlag(Carry, false);
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	for (int i = 0; i < count; i++)
+	{
+		delay++;
+		if (toLeft)
+		{
+			SetFlag(Carry | Extend, (value & msb) != 0);
+			value <<= 1;
+		}
+		else
+		{
+			SetFlag(Carry | Extend, (value & 1) != 0);
+			value >>= 1;
+		}
+	}
+
+	SetReg(m_regs.d[reg], m_opcodeSize, uint32_t(value));
+
+	SetFlag(Negative, (value & msb) != 0);
+	SetFlag(Zero, (value & mask) == 0);
+	SetFlag(Overflow, false);
+
+	delay++;
+	if (m_opcodeSize == 4)
+	{
+		delay++;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_swap(int& delay)
+{
+	const int reg = m_operation & 0b111;
+
+	uint32_t value = m_regs.d[reg];
+	value = (value >> 16) | (value << 16);
+	m_regs.d[reg] = value;
+
+	const uint64_t msb = 0x80000000;
+
+	SetFlag(Negative, (value & msb) != 0);
+	SetFlag(Zero, value == 0);
+	SetFlag(Overflow|Carry, false);
 
 	return true;
 }
