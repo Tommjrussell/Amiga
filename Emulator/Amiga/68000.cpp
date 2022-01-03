@@ -324,7 +324,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	andi    {imm:b}, CCR
 	&M68000::UnimplementOpcode,		//	andi    {imm:w}, SR
 	&M68000::UnimplementOpcode,		//	andi.{s}  {imm}, {ea}
-	&M68000::UnimplementOpcode,		//	subi.{s}  {imm}, {ea}
+	&M68000::Opcode_subi,			//	subi.{s}  {imm}, {ea}
 	&M68000::UnimplementOpcode,		//	addi.{s}  {imm}, {ea}
 	&M68000::UnimplementOpcode,		//	eori    {imm:b}, CCR
 	&M68000::UnimplementOpcode,		//	eori    {imm:w}, SR
@@ -360,7 +360,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	nop
 	&M68000::UnimplementOpcode,		//	stop
 	&M68000::UnimplementOpcode,		//	rte
-	&M68000::UnimplementOpcode,		//	rts
+	&M68000::Opcode_rts,			//	rts
 	&M68000::UnimplementOpcode,		//	trapv
 	&M68000::UnimplementOpcode,		//	rtr
 	&M68000::UnimplementOpcode,		//	jsr     {ea}
@@ -373,7 +373,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	s{cc}     {ea}
 	&M68000::UnimplementOpcode,		//	addq.{s}  {q}, {ea}
 	&M68000::Opcode_subq,			//	subq.{s}  {q}, {ea}
-	&M68000::UnimplementOpcode,		//	bsr     {disp}
+	&M68000::Opcode_bsr,			//	bsr     {disp}
 	&M68000::Opcode_bcc,			//	b{cc}     {disp}
 	&M68000::Opcode_moveq,			//	moveq   {data}, D{REG}
 	&M68000::UnimplementOpcode,		//	divu    {ea:w}, D{REG}
@@ -567,10 +567,10 @@ bool M68000::DecodeOneInstruction(int& delay)
 
 	if ((decodeCode & kEffectiveAddress1) != 0)
 	{
-		m_ea[0].mode = (m_operation >> 3) & 0x7;
-		m_ea[0].xn = (m_operation & 0x7);
+		const uint32_t mode = (m_operation >> 3) & 0x7;
+		const uint32_t xn = (m_operation & 0x7);
 
-		const uint16_t eaType = GetEAType(m_ea[0].mode, m_ea[0].xn);
+		const uint16_t eaType = GetEAType(mode, xn);
 		if ((eaType & kDecoding[instIndex].eaMask) == 0)
 		{
 			// illegal ea mode
@@ -579,13 +579,19 @@ bool M68000::DecodeOneInstruction(int& delay)
 			return false;
 		}
 
-		m_ea[0] = DecodeEffectiveAddress(m_ea[0].mode, m_ea[0].xn, m_opcodeSize, delay);
+		m_ea[0] = DecodeEffectiveAddress(mode, xn, m_opcodeSize, delay);
+		m_ea[0].mode = mode;
+		m_ea[0].xn = xn;
+
 	}
 	if ((decodeCode & kEffectiveAddress2) != 0)
 	{
-		m_ea[1].mode = (m_operation >> 6) & 0x7;
-		m_ea[1].xn = (m_operation >> 9) & 0x7;
-		m_ea[1] = DecodeEffectiveAddress(m_ea[1].mode, m_ea[1].xn, m_opcodeSize, delay);
+		const uint32_t mode = (m_operation >> 6) & 0x7;
+		const uint32_t xn = (m_operation >> 9) & 0x7;
+
+		m_ea[1] = DecodeEffectiveAddress(mode, xn, m_opcodeSize, delay);
+		m_ea[1].mode = mode;
+		m_ea[1].xn = xn;
 	}
 
 	return true;
@@ -1721,6 +1727,64 @@ bool M68000::Opcode_movem(int& delay)
 		// TODO - check if more is required!
 
 	}
+
+	return true;
+}
+
+bool M68000::Opcode_subi(int& delay)
+{
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	uint64_t result = eaValue - m_immediateValue;
+	SetEaValue(m_ea[0], m_opcodeSize, result);
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	const auto signBefore = eaValue & msb;
+	const auto signAfter = result & msb;
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, signAfter != 0);
+	SetFlag(Overflow, ((signBefore ^ (m_immediateValue & msb)) != 0) && (signBefore != signAfter));
+	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
+
+	if (m_opcodeSize == 4)
+	{
+		delay += 2;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_bsr(int& delay)
+{
+	int32_t displacement = int8_t(m_operation & 0x00ff);
+
+	const auto pc = m_regs.pc;
+	const auto nextWord = m_bus->ReadBusWord(m_regs.pc); // ignored if 8-bit displacement
+
+	if (displacement == 0)
+	{
+		displacement = SignExtend(nextWord);
+		m_regs.pc += 2;
+	}
+
+	m_regs.a[7] -= 4;
+	WriteBusLong(m_regs.a[7], m_regs.pc);
+	m_regs.pc = pc + displacement;
+
+	delay += 1;
+
+	return true;
+}
+
+bool M68000::Opcode_rts(int& delay)
+{
+	m_bus->ReadBusWord(m_regs.pc); // ignored (pre-fetch of next instruction)
+	m_regs.pc = ReadBusLong(m_regs.a[7]);
+	m_regs.a[7] += 4;
 
 	return true;
 }

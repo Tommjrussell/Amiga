@@ -135,7 +135,10 @@ namespace cpu
 		bool Opcode_lsd_reg(int& delay);
 		bool Opcode_lsd_ea(int& delay);
 		bool Opcode_swap(int& delay);
-		bool Opcode_movem(int &delay);
+		bool Opcode_movem(int& delay);
+		bool Opcode_subi(int& delay);
+		bool Opcode_bsr(int& delay);
+		bool Opcode_rts(int& delay);
 
 	private:
 
