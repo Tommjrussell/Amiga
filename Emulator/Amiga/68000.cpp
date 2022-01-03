@@ -365,8 +365,8 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,		//	rtr
 	&M68000::UnimplementOpcode,		//	jsr     {ea}
 	&M68000::Opcode_jmp,			//	jmp     {ea}
-	&M68000::UnimplementOpcode,		//	movem.{wl} {list}, {ea}
-	&M68000::UnimplementOpcode,		//	movem.{wl} {ea}, {list}
+	&M68000::Opcode_movem,			//	movem.{wl} {list}, {ea}
+	&M68000::Opcode_movem,			//	movem.{wl} {ea}, {list}
 	&M68000::Opcode_lea,			//	lea     {ea}, A{REG}
 	&M68000::UnimplementOpcode,		//	chk     {ea}, D{REG}
 	&M68000::Opcode_dbcc,			//	db{cc}    D{reg}, {braDisp}
@@ -550,6 +550,18 @@ bool M68000::DecodeOneInstruction(int& delay)
 		break;
 	}
 
+	auto GetEAType = [](uint16_t mode, uint16_t xn) -> uint16_t
+	{
+		if (mode < 7)
+		{
+			return uint16_t(0x0001 << mode);
+		}
+		else
+		{
+			return uint16_t(0x0080 << xn);
+		}
+	};
+
 	bool hasEa1 = (decodeCode & kEffectiveAddress1) != 0;
 	bool hasEa2 = (decodeCode & kEffectiveAddress2) != 0;
 
@@ -557,6 +569,16 @@ bool M68000::DecodeOneInstruction(int& delay)
 	{
 		m_ea[0].mode = (m_operation >> 3) & 0x7;
 		m_ea[0].xn = (m_operation & 0x7);
+
+		const uint16_t eaType = GetEAType(m_ea[0].mode, m_ea[0].xn);
+		if ((eaType & kDecoding[instIndex].eaMask) == 0)
+		{
+			// illegal ea mode
+			m_regs.pc = m_operationAddr;
+			m_currentInstructionIndex = kNumOpcodeEntries; // used to indicate illegal instruction
+			return false;
+		}
+
 		m_ea[0] = DecodeEffectiveAddress(m_ea[0].mode, m_ea[0].xn, m_opcodeSize, delay);
 	}
 	if ((decodeCode & kEffectiveAddress2) != 0)
@@ -1563,6 +1585,142 @@ bool M68000::Opcode_swap(int& delay)
 	SetFlag(Negative, (value & msb) != 0);
 	SetFlag(Zero, value == 0);
 	SetFlag(Overflow|Carry, false);
+
+	return true;
+}
+
+bool M68000::Opcode_movem(int& delay)
+{
+	const bool toRegister = (m_operation & 0b00000100'00000000) != 0;
+
+	if (toRegister)
+	{
+		/*
+			M68000PRM:
+			If the effective address is specified by the postincrement mode, only a memory-to-register
+			operation is allowed. The registers are loaded starting at the specified address;
+			the address is incremented by the operand length (2 or 4) following each transfer. The
+			order of loading is the same as that of control mode addressing. When the instruction
+			has completed, the incremented address register contains the address of the last operand
+			loaded plus the operand length. If the addressing register is also loaded from
+			memory, the memory value is ignored and the register is written with the postincremented
+			effective address.
+		*/
+
+		uint16_t regMask = uint16_t(m_immediateValue);
+		uint32_t addr = m_ea[0].addrIdx;
+
+		for (int i = 0; i < 8; i++)
+		{
+			if ((regMask & 1) == 1)
+			{
+				uint32_t value = ReadBus(addr, m_opcodeSize);
+				if (m_opcodeSize == 2)
+				{
+					value = SignExtend(value);
+				}
+				m_regs.d[i] = value;
+				addr += m_opcodeSize;
+			}
+			regMask >>= 1;
+		}
+		for (int i = 0; i < 8; i++)
+		{
+			if ((regMask & 1) == 1)
+			{
+				uint32_t value = ReadBus(addr, m_opcodeSize);
+				if (m_opcodeSize == 2)
+				{
+					value = SignExtend(value);
+				}
+				m_regs.a[i] = value;
+				addr += m_opcodeSize;
+			}
+			regMask >>= 1;
+		}
+
+		const bool postIncrement = m_ea[0].mode == 0b011;
+		if (postIncrement)
+		{
+			auto aReg = m_ea[0].xn;
+			m_regs.a[aReg] = addr;
+		}
+
+		delay += 2; // extra unidentified IO according to timings doc. Add delay to compensate
+	}
+	else
+	{
+		/*
+			If the effective address is specified by the predecrement mode, only a register-to-memory
+			operation is allowed. The registers are stored starting at the specified address
+			minus the operand length (2 or 4), and the address is decremented by the operand
+			length following each transfer. The order of storing is from A7 to A0, then from D7 to
+			D0. When the instruction has completed, the decremented address register contains
+			the address of the last operand stored. For the MC68020, MC68030, MC68040, and
+			CPU32, if the addressing register is also moved to memory, the value written is the initial
+			register value decremented by the size of the operation. The MC68000 and
+			MC68010 write the initial register value (not decremented).
+		*/
+
+		uint16_t regMask = uint16_t(m_immediateValue);
+		uint32_t addr = m_ea[0].addrIdx;
+
+		const bool preDecrement = m_ea[0].mode == 0b100;
+
+		if (preDecrement)
+		{
+			auto aReg = m_ea[0].xn;
+
+			for (int i = 0; i < 8; i++)
+			{
+				if ((regMask & 1) == 1)
+				{
+					auto value = GetReg(m_regs.a[7 - i], m_opcodeSize);
+					WriteBus(addr, m_opcodeSize, value);
+					addr -= m_opcodeSize;
+				}
+				regMask >>= 1;
+			}
+			for (int i = 0; i < 8; i++)
+			{
+				if ((regMask & 1) == 1)
+				{
+					auto value = GetReg(m_regs.d[7 - i],  m_opcodeSize);
+					WriteBus(addr, m_opcodeSize, value);
+					addr -= m_opcodeSize;
+				}
+				regMask >>= 1;
+			}
+
+			m_regs.a[aReg] = addr + m_opcodeSize;
+		}
+		else
+		{
+			for (int i = 0; i < 8; i++)
+			{
+				if ((regMask & 1) == 1)
+				{
+					auto value = GetReg(m_regs.d[i], m_opcodeSize);
+					WriteBus(addr, m_opcodeSize, value);
+					addr += m_opcodeSize;
+				}
+				regMask >>= 1;
+			}
+			for (int i = 0; i < 8; i++)
+			{
+				if ((regMask & 1) == 1)
+				{
+					auto value = GetReg(m_regs.a[i], m_opcodeSize);
+					WriteBus(addr, m_opcodeSize, value);
+					addr += m_opcodeSize;
+				}
+				regMask >>= 1;
+			}
+		}
+
+		// TODO - check if more is required!
+
+	}
 
 	return true;
 }
