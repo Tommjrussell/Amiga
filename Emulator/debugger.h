@@ -37,5 +37,6 @@ namespace guru
 
 		guru::AmigaApp* m_app;
 		am::Amiga* m_amiga;
+		uint32_t m_breakpoint = 0;
 	};
 }

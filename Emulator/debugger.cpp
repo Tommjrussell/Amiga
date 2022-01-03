@@ -198,6 +198,18 @@ bool guru::Debugger::Draw()
 			m_instructions.clear();
 		}
 
+		if (ActiveButton("Run Until :", !running))
+		{
+			m_amiga->SetBreakpoint(m_breakpoint);
+			m_app->SetRunning(true);
+			m_instructions.clear();
+		}
+
+		ImGui::SameLine();
+		ImGui::PushItemWidth(64);
+		ImGui::InputInt("", (int*)&m_breakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue);
+		ImGui::PopItemWidth();
+
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 	}
