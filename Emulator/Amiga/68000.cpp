@@ -93,8 +93,8 @@ namespace
 		{ 0b11110001'00000000,	0b10010001'00000000 }, //	sub.{s}   D{REG}, {ea}
 
 		{ 0b11110000'11000000,	0b10110000'11000000 }, //	cmpa.{WL}  {ea}, A{REG}
-		{ 0b11110001'00111000,	0b10110001'00001000 }, //	cmpm.{s}  A{reg}+, A{REG}+
 		{ 0b11110001'00000000,	0b10110000'00000000 }, //	cmp.{s}   {ea}, D{REG}
+		{ 0b11110001'00111000,	0b10110001'00001000 }, //	cmpm.{s}  A{reg}+, A{REG}+
 		{ 0b11110001'00000000,	0b10110001'00000000 }, //	eor.{s}   D{REG}, {ea}
 
 		{ 0b11110001'11000000,	0b11000000'11000000 }, //	mulu    {ea}, D{REG}
@@ -216,15 +216,15 @@ namespace
 		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	divu    {ea:w}, D{REG}
 		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	divs    {ea:w}, D{REG}
 		{ 0, 0 },																								//	sbcd    {m}
-		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	or.{s}    {ea}, D{REG}
-		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	or.{s}    D{REG}, {ea}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::DataAddressing },										//	or.{s}    {ea}, D{REG}
+		{ kEffectiveAddress1 | kSizeVariableNormal, EA::MemoryAlterable },										//	or.{s}    D{REG}, {ea}
 		{ kEffectiveAddress1 | kSizeVariableSmall, EA::All },													//	suba.{WL}  {ea}, A{REG}
 		{ kSizeVariableNormal, 0 },																				//	subx.{s}  {m}
 		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	sub.{s}   {ea}, D{REG}
 		{ kEffectiveAddress1 | kSizeVariableNormal, EA::MemoryAlterable },										//	sub.{s}   D{REG}, {ea}
 		{ kEffectiveAddress1 | kSizeVariableSmall, EA::All },													//	cmpa.{WL}  {ea}, A{REG}
-		{ kSizeVariableNormal, 0 },																				//	cmpm.{s}  A{reg}+, A{REG}+
 		{ kEffectiveAddress1 | kSizeVariableNormal, EA::All },													//	cmp.{s}   {ea}, D{REG}
+		{ kSizeVariableNormal, 0 },																				//	cmpm.{s}  A{reg}+, A{REG}+
 		{ kEffectiveAddress1 | kSizeVariableNormal, EA::DataAlterable },										//	eor.{s}   D{REG}, {ea}
 		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	mulu    {ea}, D{REG}
 		{ kSizeFixedWord | kEffectiveAddress1, EA::DataAddressing },											//	muls    {ea}, D{REG}
@@ -318,99 +318,99 @@ namespace
 
 M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 {
-	&M68000::UnimplementOpcode,		//	ori     {imm:b}, CCR
-	&M68000::UnimplementOpcode,		//	ori     {imm:w}, SR
-	&M68000::UnimplementOpcode,		//	ori.{s}   {imm}, {ea}
-	&M68000::UnimplementOpcode,		//	andi    {imm:b}, CCR
-	&M68000::UnimplementOpcode,		//	andi    {imm:w}, SR
-	&M68000::UnimplementOpcode,		//	andi.{s}  {imm}, {ea}
-	&M68000::Opcode_subi,			//	subi.{s}  {imm}, {ea}
-	&M68000::UnimplementOpcode,		//	addi.{s}  {imm}, {ea}
-	&M68000::UnimplementOpcode,		//	eori    {imm:b}, CCR
-	&M68000::UnimplementOpcode,		//	eori    {imm:w}, SR
-	&M68000::UnimplementOpcode,		//	eori.{s}  {imm}, {ea}
-	&M68000::Opcode_cmpi,			//	cmpi.{s}  {imm}, {ea}
-	&M68000::Opcode_btst,			//	btst    {imm:b}, {ea}
-	&M68000::UnimplementOpcode,		//	b(chg/clr/set)    {imm:b}, {ea}
-	&M68000::UnimplementOpcode,		//	movep.{wl} ({immDis16}, A{reg}), D{REG}
-	&M68000::UnimplementOpcode,		//	movep.{wl} D{REG}, ({immDis16}, A{reg})
-	&M68000::Opcode_btst,			//	btst    D{REG}, {ea}
-	&M68000::UnimplementOpcode,		//	b(chg/clr/set)    D{REG}, {ea}
-	&M68000::Opcode_move,			//	movea/move.b
-	&M68000::Opcode_move,			//	movea/move.l
-	&M68000::Opcode_move,			//	movea/move.w
-	&M68000::UnimplementOpcode,		//	move    SR, {ea:w}
-	&M68000::UnimplementOpcode,		//	move    {ea:b}, CCR
-	&M68000::UnimplementOpcode,		//	move    {ea:w}, SR
-	&M68000::UnimplementOpcode,		//	negx.{s}  {ea}
-	&M68000::UnimplementOpcode,		//	clr.{s}   {ea}
-	&M68000::UnimplementOpcode,		//	neg.{s}   {ea}
-	&M68000::Opcode_not,			//	not.{s}   {ea}
-	&M68000::UnimplementOpcode,		//	ext.{wl}   D{reg}
-	&M68000::UnimplementOpcode,		//	nbcd    {ea:b}
-	&M68000::Opcode_swap,			//	swap    D{reg}
-	&M68000::UnimplementOpcode,		//	pea     {ea:l}
-	&M68000::UnimplementOpcode,		//	tas     {ea:b}
-	&M68000::Opcode_tst,			//	tst.{s}   {ea}
-	&M68000::UnimplementOpcode,		//	trap    {v}
-	&M68000::UnimplementOpcode,		//	link    A{reg}, {immDis16}
-	&M68000::UnimplementOpcode,		//	unlk    A{reg}
-	&M68000::UnimplementOpcode,		//	move    A{reg}, USP
-	&M68000::UnimplementOpcode,		//	reset
-	&M68000::UnimplementOpcode,		//	nop
-	&M68000::UnimplementOpcode,		//	stop
-	&M68000::UnimplementOpcode,		//	rte
-	&M68000::Opcode_rts,			//	rts
-	&M68000::UnimplementOpcode,		//	trapv
-	&M68000::UnimplementOpcode,		//	rtr
-	&M68000::UnimplementOpcode,		//	jsr     {ea}
-	&M68000::Opcode_jmp,			//	jmp     {ea}
-	&M68000::Opcode_movem,			//	movem.{wl} {list}, {ea}
-	&M68000::Opcode_movem,			//	movem.{wl} {ea}, {list}
-	&M68000::Opcode_lea,			//	lea     {ea}, A{REG}
-	&M68000::UnimplementOpcode,		//	chk     {ea}, D{REG}
-	&M68000::Opcode_dbcc,			//	db{cc}    D{reg}, {braDisp}
-	&M68000::UnimplementOpcode,		//	s{cc}     {ea}
-	&M68000::UnimplementOpcode,		//	addq.{s}  {q}, {ea}
-	&M68000::Opcode_subq,			//	subq.{s}  {q}, {ea}
-	&M68000::Opcode_bsr,			//	bsr     {disp}
-	&M68000::Opcode_bcc,			//	b{cc}     {disp}
-	&M68000::Opcode_moveq,			//	moveq   {data}, D{REG}
-	&M68000::UnimplementOpcode,		//	divu    {ea:w}, D{REG}
-	&M68000::UnimplementOpcode,		//	divs    {ea:w}, D{REG}
-	&M68000::UnimplementOpcode,		//	sbcd    {m}
-	&M68000::UnimplementOpcode,		//	or.{s}    {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	or.{s}    D{REG}, {ea}
-	&M68000::Opcode_suba,			//	suba.{WL}  {ea}, A{REG}
-	&M68000::UnimplementOpcode,		//	subx.{s}  {m}
-	&M68000::Opcode_sub,			//	sub.{s}   {ea}, D{REG}
-	&M68000::Opcode_sub,			//	sub.{s}   D{REG}, {ea}
-	&M68000::Opcode_cmpa,			//	cmpa.{WL}  {ea}, A{REG}
-	&M68000::UnimplementOpcode,		//	cmpm.{s}  A{reg}+, A{REG}+
-	&M68000::Opcode_cmp,			//	cmp.{s}   {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	eor.{s}   D{REG}, {ea}
-	&M68000::UnimplementOpcode,		//	mulu    {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	muls    {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	abcd    {m}
-	&M68000::UnimplementOpcode,		//	exg     reg, reg
-	&M68000::UnimplementOpcode,		//	and.{s}   {ea}, D{REG}
-	&M68000::UnimplementOpcode,		//	and.{s}   D{REG}, {ea}
-	&M68000::Opcode_adda,			//	adda.{WL}  {ea}, A{REG}
-	&M68000::UnimplementOpcode,		//	addx.{s}  {m}
-	&M68000::Opcode_add,			//	add.{s}   {ea}, D{REG}
-	&M68000::Opcode_add,			//	add.{s}   D{REG}, {ea}
-	&M68000::UnimplementOpcode,		//	as{R}     {ea}
-	&M68000::Opcode_lsd_ea,			//	ls{R}     {ea}
-	&M68000::UnimplementOpcode,		//	rox{R}    {ea}
-	&M68000::UnimplementOpcode,		//	ro{R}     {ea}
-	&M68000::UnimplementOpcode,		//	as{R}.{s}   {q}, D{reg}
-	&M68000::Opcode_lsd_reg,		//	ls{R}.{s}   {q}, D{reg}
-	&M68000::UnimplementOpcode,		//	rox{R}.{s}  {q}, D{reg}
-	&M68000::UnimplementOpcode,		//	ro{R}.{s}   {q}, D{reg}
-	&M68000::UnimplementOpcode,		//	as{R}.{s}   D{REG}, D{reg}
-	&M68000::Opcode_lsd_reg,		//	ls{R}.{s}   D{REG}, D{reg}
-	&M68000::UnimplementOpcode,		//	rox{R}.{s}  D{REG}, D{reg}
-	&M68000::UnimplementOpcode,		//	ro{R}.{s}   D{REG}, D{reg}
+	&M68000::UnimplementOpcode,			//	ori     {imm:b}, CCR
+	&M68000::UnimplementOpcode,			//	ori     {imm:w}, SR
+	&M68000::Opcode_bitwise_immediate,		//	ori.{s}   {imm}, {ea}
+	&M68000::UnimplementOpcode,			//	andi    {imm:b}, CCR
+	&M68000::UnimplementOpcode,			//	andi    {imm:w}, SR
+	&M68000::Opcode_bitwise_immediate,	//	andi.{s}  {imm}, {ea}
+	&M68000::Opcode_subi,				//	subi.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,			//	addi.{s}  {imm}, {ea}
+	&M68000::UnimplementOpcode,			//	eori    {imm:b}, CCR
+	&M68000::UnimplementOpcode,			//	eori    {imm:w}, SR
+	&M68000::Opcode_bitwise_immediate,	//	eori.{s}  {imm}, {ea}
+	&M68000::Opcode_cmpi,				//	cmpi.{s}  {imm}, {ea}
+	&M68000::Opcode_bitop,				//	btst    {imm:b}, {ea}
+	&M68000::Opcode_bitop,				//	b(chg/clr/set)    {imm:b}, {ea}
+	&M68000::UnimplementOpcode,			//	movep.{wl} ({immDis16}, A{reg}), D{REG}
+	&M68000::UnimplementOpcode,			//	movep.{wl} D{REG}, ({immDis16}, A{reg})
+	&M68000::Opcode_bitop,				//	btst    D{REG}, {ea}
+	&M68000::Opcode_bitop,				//	b(chg/clr/set)    D{REG}, {ea}
+	&M68000::Opcode_move,				//	movea/move.b
+	&M68000::Opcode_move,				//	movea/move.l
+	&M68000::Opcode_move,				//	movea/move.w
+	&M68000::UnimplementOpcode,			//	move    SR, {ea:w}
+	&M68000::UnimplementOpcode,			//	move    {ea:b}, CCR
+	&M68000::UnimplementOpcode,			//	move    {ea:w}, SR
+	&M68000::UnimplementOpcode,			//	negx.{s}  {ea}
+	&M68000::Opcode_clr,				//	clr.{s}   {ea}
+	&M68000::UnimplementOpcode,			//	neg.{s}   {ea}
+	&M68000::Opcode_not,				//	not.{s}   {ea}
+	&M68000::UnimplementOpcode,			//	ext.{wl}   D{reg}
+	&M68000::UnimplementOpcode,			//	nbcd    {ea:b}
+	&M68000::Opcode_swap,				//	swap    D{reg}
+	&M68000::UnimplementOpcode,			//	pea     {ea:l}
+	&M68000::UnimplementOpcode,			//	tas     {ea:b}
+	&M68000::Opcode_tst,				//	tst.{s}   {ea}
+	&M68000::UnimplementOpcode,			//	trap    {v}
+	&M68000::UnimplementOpcode,			//	link    A{reg}, {immDis16}
+	&M68000::UnimplementOpcode,			//	unlk    A{reg}
+	&M68000::UnimplementOpcode,			//	move    A{reg}, USP
+	&M68000::UnimplementOpcode,			//	reset
+	&M68000::UnimplementOpcode,			//	nop
+	&M68000::UnimplementOpcode,			//	stop
+	&M68000::UnimplementOpcode,			//	rte
+	&M68000::Opcode_rts,				//	rts
+	&M68000::UnimplementOpcode,			//	trapv
+	&M68000::UnimplementOpcode,			//	rtr
+	&M68000::Opcode_jsr,				//	jsr     {ea}
+	&M68000::Opcode_jmp,				//	jmp     {ea}
+	&M68000::Opcode_movem,				//	movem.{wl} {list}, {ea}
+	&M68000::Opcode_movem,				//	movem.{wl} {ea}, {list}
+	&M68000::Opcode_lea,				//	lea     {ea}, A{REG}
+	&M68000::UnimplementOpcode,			//	chk     {ea}, D{REG}
+	&M68000::Opcode_dbcc,				//	db{cc}    D{reg}, {braDisp}
+	&M68000::UnimplementOpcode,			//	s{cc}     {ea}
+	&M68000::Opcode_addq,				//	addq.{s}  {q}, {ea}
+	&M68000::Opcode_subq,				//	subq.{s}  {q}, {ea}
+	&M68000::Opcode_bsr,				//	bsr     {disp}
+	&M68000::Opcode_bcc,				//	b{cc}     {disp}
+	&M68000::Opcode_moveq,				//	moveq   {data}, D{REG}
+	&M68000::UnimplementOpcode,			//	divu    {ea:w}, D{REG}
+	&M68000::UnimplementOpcode,			//	divs    {ea:w}, D{REG}
+	&M68000::UnimplementOpcode,			//	sbcd    {m}
+	&M68000::Opcode_bitwise,			//	or.{s}    {ea}, D{REG}
+	&M68000::Opcode_bitwise,			//	or.{s}    D{REG}, {ea}
+	&M68000::Opcode_suba,				//	suba.{WL}  {ea}, A{REG}
+	&M68000::UnimplementOpcode,			//	subx.{s}  {m}
+	&M68000::Opcode_sub,				//	sub.{s}   {ea}, D{REG}
+	&M68000::Opcode_sub,				//	sub.{s}   D{REG}, {ea}
+	&M68000::Opcode_cmpa,				//	cmpa.{WL}  {ea}, A{REG}
+	&M68000::Opcode_cmp,				//	cmp.{s}   {ea}, D{REG}
+	&M68000::UnimplementOpcode,			//	cmpm.{s}  A{reg}+, A{REG}+
+	&M68000::Opcode_bitwise,			//	eor.{s}   D{REG}, {ea}
+	&M68000::UnimplementOpcode,			//	mulu    {ea}, D{REG}
+	&M68000::UnimplementOpcode,			//	muls    {ea}, D{REG}
+	&M68000::UnimplementOpcode,			//	abcd    {m}
+	&M68000::Opcode_exg,				//	exg     reg, reg
+	&M68000::Opcode_bitwise,			//	and.{s}   {ea}, D{REG}
+	&M68000::Opcode_bitwise,			//	and.{s}   D{REG}, {ea}
+	&M68000::Opcode_adda,				//	adda.{WL}  {ea}, A{REG}
+	&M68000::UnimplementOpcode,			//	addx.{s}  {m}
+	&M68000::Opcode_add,				//	add.{s}   {ea}, D{REG}
+	&M68000::Opcode_add,				//	add.{s}   D{REG}, {ea}
+	&M68000::UnimplementOpcode,			//	as{R}     {ea}
+	&M68000::Opcode_lsd_ea,				//	ls{R}     {ea}
+	&M68000::UnimplementOpcode,			//	rox{R}    {ea}
+	&M68000::UnimplementOpcode,			//	ro{R}     {ea}
+	&M68000::UnimplementOpcode,			//	as{R}.{s}   {q}, D{reg}
+	&M68000::Opcode_lsd_reg,			//	ls{R}.{s}   {q}, D{reg}
+	&M68000::UnimplementOpcode,			//	rox{R}.{s}  {q}, D{reg}
+	&M68000::UnimplementOpcode,			//	ro{R}.{s}   {q}, D{reg}
+	&M68000::UnimplementOpcode,			//	as{R}.{s}   D{REG}, D{reg}
+	&M68000::Opcode_lsd_reg,			//	ls{R}.{s}   D{REG}, D{reg}
+	&M68000::UnimplementOpcode,			//	rox{R}.{s}  D{REG}, D{reg}
+	&M68000::UnimplementOpcode,			//	ro{R}.{s}   D{REG}, D{reg}
 };
 
 
@@ -1204,9 +1204,10 @@ bool M68000::Opcode_dbcc(int& delay)
 	return true;
 }
 
-bool M68000::Opcode_btst(int& delay)
+bool M68000::Opcode_bitop(int& delay)
 {
 	const bool isDynamic = (m_operation & 0b00000001'00000000) != 0;
+	const uint32_t bitop = (m_operation & 0b00000000'11000000);
 
 	uint32_t bitIndex;
 	if (isDynamic)
@@ -1224,7 +1225,15 @@ bool M68000::Opcode_btst(int& delay)
 		// If destination is a data register, the full long word is used.
 		m_opcodeSize = 4;
 		bitIndex &= 0b11111;
+
+		// TODO : try to work out exact timings for register bit operations.
 		delay += 1;
+		if (bitop != 0)
+		{
+			// TODO : bclr apparently takes longer still for some reason
+			// but is this only when the bit is altered?
+			delay += 1;
+		}
 	}
 	else
 	{
@@ -1235,7 +1244,28 @@ bool M68000::Opcode_btst(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
 		return false;
 
-	SetFlag(Zero, (value & (1ull << bitIndex)) == 0);
+	const auto bitmask = 1ull << bitIndex;
+
+	SetFlag(Zero, (value & bitmask) == 0);
+
+	if (bitop != 0)
+	{
+		if (bitop == 0b01000000) // bchg
+		{
+			value ^= bitmask;
+		}
+		else if (bitop == 0b10000000) // bclr
+		{
+			value &= ~bitmask;
+		}
+		else if (bitop == 0b11000000) // bset
+		{
+			value |= bitmask;
+		}
+
+		if (!SetEaValue(m_ea[0], m_opcodeSize, value))
+			return false;
+	}
 
 	return true;
 }
@@ -1785,6 +1815,232 @@ bool M68000::Opcode_rts(int& delay)
 	m_bus->ReadBusWord(m_regs.pc); // ignored (pre-fetch of next instruction)
 	m_regs.pc = ReadBusLong(m_regs.a[7]);
 	m_regs.a[7] += 4;
+
+	return true;
+}
+
+bool M68000::Opcode_bitwise(int& delay)
+{
+	const bool ToEa = (m_operation & 0b00000001'00000000) != 0;
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+	const auto op = (m_operation & 0xf000);
+
+	const uint64_t regValue = GetReg(m_regs.d[reg], m_opcodeSize);
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	uint64_t result;
+
+	if (op == 0x8000) // or
+	{
+		result = regValue | eaValue;
+	}
+	else if (op == 0xc000) // and
+	{
+		result = regValue & eaValue;
+	}
+	else // eor
+	{
+		result = regValue ^ eaValue;
+	}
+
+	if (ToEa)
+	{
+		if (!SetEaValue(m_ea[0], m_opcodeSize, result))
+			return false;
+
+		if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
+		{
+			// This case only possible for eor
+			delay += 1;
+		}
+	}
+	else
+	{
+		SetReg(m_regs.d[reg], m_opcodeSize, uint32_t(result));
+
+		if (m_opcodeSize == 4)
+		{
+			delay += 1;
+			if (m_ea[0].type == EffectiveAddressType::DataRegister
+				|| m_ea[0].type == EffectiveAddressType::Immediate)
+			{
+				delay += 1;
+			}
+		}
+	}
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	SetFlag(Negative, (result & msb) != 0);
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Overflow | Carry, false);
+
+	return true;
+}
+
+bool M68000::Opcode_clr(int& delay)
+{
+	if (!SetEaValue(m_ea[0], m_opcodeSize, 0))
+		return false;
+
+	SetFlag(Zero, true);
+	SetFlag(Negative | Overflow | Carry, false);
+
+	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
+	{
+		delay += 1;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_addq(int& delay)
+{
+	if (m_ea[0].type == EffectiveAddressType::AddressRegister)
+	{
+		if (m_opcodeSize == 1)
+			return false; // cannot do byte-size subq on address register
+
+		// From PRM: "When adding to address registers, the condition codes
+		// are not altered, and the entire destination address register is
+		// used regardless of the operation size."
+		m_opcodeSize = 4;
+
+		delay += 2;
+	}
+	else if (m_ea[0].type == EffectiveAddressType::DataRegister && m_opcodeSize == 4)
+	{
+		delay += 2;
+	}
+
+	auto addValue = (m_operation & 0b00001110'00000000) >> 9;
+	if (addValue == 0)
+		addValue = 8;
+
+	uint64_t value;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
+		return false;
+
+	const auto result = value + addValue;
+
+	if (m_ea[0].type != EffectiveAddressType::AddressRegister)
+	{
+		const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+		const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+		const auto signBefore = value & msb;
+		const auto signAfter = result & msb;
+
+		SetFlag(Zero, (result & mask) == 0);
+		SetFlag(Negative, signAfter != 0);
+		SetFlag(Overflow, signBefore == 0 && signAfter != 0);
+		SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
+	}
+
+	if (!SetEaValue(m_ea[0], m_opcodeSize, result))
+		return false;
+
+	return true;
+}
+
+bool M68000::Opcode_bitwise_immediate(int& delay)
+{
+	const auto op = m_operation & 0b00001110'0000000;
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	uint64_t result;
+
+	if (op == 0x0000) // or
+	{
+		result = eaValue | m_immediateValue;
+	}
+	else if (op == 0x0200) // and
+	{
+		result = eaValue & m_immediateValue;
+	}
+	else // eor
+	{
+		result = eaValue ^ m_immediateValue;
+	}
+
+	SetEaValue(m_ea[0], m_opcodeSize, result);
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, (result & msb) != 0);
+	SetFlag(Overflow | Carry, false);
+
+	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
+	{
+		delay += 2;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_exg(int& delay)
+{
+	const auto opmode = (m_operation & 0b00000000'11111000);
+	const auto rx = (m_operation & 0b00001110'00000000) >> 9;
+	const auto ry = (m_operation & 0b00000000'00000111);
+
+	if (opmode == 0b01000000)
+	{
+		// data registers
+		std::swap(m_regs.d[rx], m_regs.d[ry]);
+	}
+	else if (opmode == 0b01001000)
+	{
+		// address registers
+		std::swap(m_regs.a[rx], m_regs.a[ry]);
+	}
+	else if (opmode == 0b10001000)
+	{
+		// data registers and address register
+		std::swap(m_regs.d[rx], m_regs.a[ry]);
+	}
+	else
+	{
+		// illegal instruction
+		return false;
+	}
+
+	delay += 1;
+
+	return true;
+}
+
+bool M68000::Opcode_jsr(int& delay)
+{
+	if (m_ea[0].mode == 0b010)
+	{
+		m_bus->ReadBusWord(m_regs.pc); // ignored
+	}
+	else if (m_ea[0].mode == 0b101 || (m_ea[0].mode == 0b111 && (m_ea[0].xn == 0b000 || m_ea[0].xn == 0b010)))
+	{
+		delay += 1;
+	}
+	else if (m_ea[0].mode == 0b110 || (m_ea[0].mode == 0b111 && m_ea[0].xn == 0b011))
+	{
+		delay += 2;
+	}
+
+	m_regs.a[7] -= 4;
+	WriteBusLong(m_regs.a[7], m_regs.pc);
+
+	if ((m_ea[0].addrIdx & 1) != 0)
+		return false; // unaligned memory access
+
+	m_regs.pc = m_ea[0].addrIdx;
 
 	return true;
 }

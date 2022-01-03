@@ -122,7 +122,7 @@ namespace cpu
 		bool Opcode_cmpa(int& delay);
 		bool Opcode_cmpi(int& delay);
 		bool Opcode_dbcc(int& delay);
-		bool Opcode_btst(int& delay);
+		bool Opcode_bitop(int& delay); // (btst, bchg, bclr, bset)
 		bool Opcode_add(int& delay);
 		bool Opcode_not(int& delay);
 		bool Opcode_suba(int& delay);
@@ -139,6 +139,12 @@ namespace cpu
 		bool Opcode_subi(int& delay);
 		bool Opcode_bsr(int& delay);
 		bool Opcode_rts(int& delay);
+		bool Opcode_bitwise(int& delay); // (or, and, eor)
+		bool Opcode_clr(int& delay);
+		bool Opcode_addq(int& delay);
+		bool Opcode_bitwise_immediate(int& delay); // (ori, andi, eori)
+		bool Opcode_exg(int& delay);
+		bool Opcode_jsr(int& delay);
 
 	private:
 
