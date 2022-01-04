@@ -320,12 +320,12 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 {
 	&M68000::UnimplementOpcode,			//	ori     {imm:b}, CCR
 	&M68000::UnimplementOpcode,			//	ori     {imm:w}, SR
-	&M68000::Opcode_bitwise_immediate,		//	ori.{s}   {imm}, {ea}
+	&M68000::Opcode_bitwise_immediate,	//	ori.{s}   {imm}, {ea}
 	&M68000::UnimplementOpcode,			//	andi    {imm:b}, CCR
 	&M68000::UnimplementOpcode,			//	andi    {imm:w}, SR
 	&M68000::Opcode_bitwise_immediate,	//	andi.{s}  {imm}, {ea}
 	&M68000::Opcode_subi,				//	subi.{s}  {imm}, {ea}
-	&M68000::UnimplementOpcode,			//	addi.{s}  {imm}, {ea}
+	&M68000::Opcode_addi,				//	addi.{s}  {imm}, {ea}
 	&M68000::UnimplementOpcode,			//	eori    {imm:b}, CCR
 	&M68000::UnimplementOpcode,			//	eori    {imm:w}, SR
 	&M68000::Opcode_bitwise_immediate,	//	eori.{s}  {imm}, {ea}
@@ -344,7 +344,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,			//	move    {ea:w}, SR
 	&M68000::UnimplementOpcode,			//	negx.{s}  {ea}
 	&M68000::Opcode_clr,				//	clr.{s}   {ea}
-	&M68000::UnimplementOpcode,			//	neg.{s}   {ea}
+	&M68000::Opcode_neg,				//	neg.{s}   {ea}
 	&M68000::Opcode_not,				//	not.{s}   {ea}
 	&M68000::UnimplementOpcode,			//	ext.{wl}   D{reg}
 	&M68000::UnimplementOpcode,			//	nbcd    {ea:b}
@@ -389,7 +389,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_cmp,				//	cmp.{s}   {ea}, D{REG}
 	&M68000::UnimplementOpcode,			//	cmpm.{s}  A{reg}+, A{REG}+
 	&M68000::Opcode_bitwise,			//	eor.{s}   D{REG}, {ea}
-	&M68000::UnimplementOpcode,			//	mulu    {ea}, D{REG}
+	&M68000::Opcode_mulu,				//	mulu    {ea}, D{REG}
 	&M68000::UnimplementOpcode,			//	muls    {ea}, D{REG}
 	&M68000::UnimplementOpcode,			//	abcd    {m}
 	&M68000::Opcode_exg,				//	exg     reg, reg
@@ -1780,7 +1780,7 @@ bool M68000::Opcode_subi(int& delay)
 	SetFlag(Overflow, ((signBefore ^ (m_immediateValue & msb)) != 0) && (signBefore != signAfter));
 	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
 
-	if (m_opcodeSize == 4)
+	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
 	{
 		delay += 2;
 	}
@@ -2041,6 +2041,92 @@ bool M68000::Opcode_jsr(int& delay)
 		return false; // unaligned memory access
 
 	m_regs.pc = m_ea[0].addrIdx;
+
+	return true;
+}
+
+bool M68000::Opcode_mulu(int& delay)
+{
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], 2, eaValue))
+		return false;
+
+	const uint64_t regValue = GetReg(m_regs.d[reg], 2);
+
+	uint64_t result = eaValue * regValue;
+	m_regs.d[reg] = uint32_t(result);
+
+	SetFlag(Zero, result == 0);
+	SetFlag(Negative, (result & 0x8000000) != 0);
+	SetFlag(Overflow | Carry, false);
+
+	delay += 18;
+
+	int b = 1;
+	for (int i = 0; i < 16; i++)
+	{
+		if ((eaValue & b) == 1)
+		{
+			delay += 1;
+		}
+		b <<= 1;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_addi(int& delay)
+{
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	uint64_t result = m_immediateValue + eaValue;
+	SetEaValue(m_ea[0], m_opcodeSize, result);
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	const auto signBefore = eaValue & msb;
+	const auto signAfter = result & msb;
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, signAfter != 0);
+	SetFlag(Overflow, (signBefore == (m_immediateValue & msb)) && (signBefore != signAfter));
+	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
+
+	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
+	{
+		delay += 2;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_neg(int& delay)
+{
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	uint64_t result = 0 - eaValue;
+	SetEaValue(m_ea[0], m_opcodeSize, result);
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	const auto signBefore = eaValue & msb;
+	const auto signAfter = result & msb;
+	SetFlag(Zero, (result & mask) == 0);
+	SetFlag(Negative, signAfter != 0);
+	SetFlag(Overflow, (signBefore != 0) && (signAfter != 0));
+	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
+
+	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
+	{
+		delay += 1;
+	}
 
 	return true;
 }

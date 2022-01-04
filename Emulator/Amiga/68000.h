@@ -145,6 +145,9 @@ namespace cpu
 		bool Opcode_bitwise_immediate(int& delay); // (ori, andi, eori)
 		bool Opcode_exg(int& delay);
 		bool Opcode_jsr(int& delay);
+		bool Opcode_mulu(int& delay);
+		bool Opcode_addi(int& delay);
+		bool Opcode_neg(int& delay);
 
 	private:
 
