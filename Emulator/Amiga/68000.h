@@ -151,10 +151,18 @@ namespace cpu
 		bool Opcode_mulu(int& delay);
 		bool Opcode_addi(int& delay);
 		bool Opcode_neg(int& delay);
+		bool Opcode_move_usp(int& delay);
+		bool Opcode_scc(int& delay);
+		bool Opcode_bitwise_to_status(int& delay); // (ori/andi/eori) to (CCR/SR)
+		bool Opcode_pea(int& delay);
+		bool Opcode_move_from_sr(int& delay);
+		bool Opcode_move_to_sr(int& delay);
+		bool Opcode_move_to_ccr(int& delay);
+		bool Opcode_rte(int& delay);
 
 	private:
 
-		bool EvaluateCondition(int condition) const;
+		bool EvaluateCondition() const;
 
 		bool StartInternalException(uint8_t vectorNum);
 		uint16_t FetchNextOperationWord();

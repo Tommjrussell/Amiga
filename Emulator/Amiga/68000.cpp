@@ -318,16 +318,16 @@ namespace
 
 M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 {
-	&M68000::UnimplementOpcode,			//	ori     {imm:b}, CCR
-	&M68000::UnimplementOpcode,			//	ori     {imm:w}, SR
+	&M68000::Opcode_bitwise_to_status,	//	ori     {imm:b}, CCR
+	&M68000::Opcode_bitwise_to_status,	//	ori     {imm:w}, SR
 	&M68000::Opcode_bitwise_immediate,	//	ori.{s}   {imm}, {ea}
-	&M68000::UnimplementOpcode,			//	andi    {imm:b}, CCR
-	&M68000::UnimplementOpcode,			//	andi    {imm:w}, SR
+	&M68000::Opcode_bitwise_to_status,	//	andi    {imm:b}, CCR
+	&M68000::Opcode_bitwise_to_status,	//	andi    {imm:w}, SR
 	&M68000::Opcode_bitwise_immediate,	//	andi.{s}  {imm}, {ea}
 	&M68000::Opcode_subi,				//	subi.{s}  {imm}, {ea}
 	&M68000::Opcode_addi,				//	addi.{s}  {imm}, {ea}
-	&M68000::UnimplementOpcode,			//	eori    {imm:b}, CCR
-	&M68000::UnimplementOpcode,			//	eori    {imm:w}, SR
+	&M68000::Opcode_bitwise_to_status,	//	eori    {imm:b}, CCR
+	&M68000::Opcode_bitwise_to_status,	//	eori    {imm:w}, SR
 	&M68000::Opcode_bitwise_immediate,	//	eori.{s}  {imm}, {ea}
 	&M68000::Opcode_cmpi,				//	cmpi.{s}  {imm}, {ea}
 	&M68000::Opcode_bitop,				//	btst    {imm:b}, {ea}
@@ -339,9 +339,9 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_move,				//	movea/move.b
 	&M68000::Opcode_move,				//	movea/move.l
 	&M68000::Opcode_move,				//	movea/move.w
-	&M68000::UnimplementOpcode,			//	move    SR, {ea:w}
-	&M68000::UnimplementOpcode,			//	move    {ea:b}, CCR
-	&M68000::UnimplementOpcode,			//	move    {ea:w}, SR
+	&M68000::Opcode_move_from_sr,		//	move    SR, {ea:w}
+	&M68000::Opcode_move_to_ccr,		//	move    {ea:b}, CCR
+	&M68000::Opcode_move_to_sr,			//	move    {ea:w}, SR
 	&M68000::UnimplementOpcode,			//	negx.{s}  {ea}
 	&M68000::Opcode_clr,				//	clr.{s}   {ea}
 	&M68000::Opcode_neg,				//	neg.{s}   {ea}
@@ -349,17 +349,17 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,			//	ext.{wl}   D{reg}
 	&M68000::UnimplementOpcode,			//	nbcd    {ea:b}
 	&M68000::Opcode_swap,				//	swap    D{reg}
-	&M68000::UnimplementOpcode,			//	pea     {ea:l}
+	&M68000::Opcode_pea,				//	pea     {ea:l}
 	&M68000::UnimplementOpcode,			//	tas     {ea:b}
 	&M68000::Opcode_tst,				//	tst.{s}   {ea}
 	&M68000::UnimplementOpcode,			//	trap    {v}
 	&M68000::UnimplementOpcode,			//	link    A{reg}, {immDis16}
 	&M68000::UnimplementOpcode,			//	unlk    A{reg}
-	&M68000::UnimplementOpcode,			//	move    A{reg}, USP
+	&M68000::Opcode_move_usp,			//	move    A{reg}, USP
 	&M68000::UnimplementOpcode,			//	reset
 	&M68000::UnimplementOpcode,			//	nop
 	&M68000::UnimplementOpcode,			//	stop
-	&M68000::UnimplementOpcode,			//	rte
+	&M68000::Opcode_rte,				//	rte
 	&M68000::Opcode_rts,				//	rts
 	&M68000::UnimplementOpcode,			//	trapv
 	&M68000::UnimplementOpcode,			//	rtr
@@ -370,7 +370,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_lea,				//	lea     {ea}, A{REG}
 	&M68000::UnimplementOpcode,			//	chk     {ea}, D{REG}
 	&M68000::Opcode_dbcc,				//	db{cc}    D{reg}, {braDisp}
-	&M68000::UnimplementOpcode,			//	s{cc}     {ea}
+	&M68000::Opcode_scc,				//	s{cc}     {ea}
 	&M68000::Opcode_addq,				//	addq.{s}  {q}, {ea}
 	&M68000::Opcode_subq,				//	subq.{s}  {q}, {ea}
 	&M68000::Opcode_bsr,				//	bsr     {disp}
@@ -920,7 +920,7 @@ void M68000::SetStatusRegister(uint16_t value)
 		std::swap(m_regs.a[7], m_regs.altA7);
 	}
 
-	m_regs.status = value;
+	m_regs.status = value & 0b1111011100011111;
 }
 
 void M68000::SetFlag(uint16_t flag, bool condition)
@@ -935,8 +935,10 @@ void M68000::SetFlag(uint16_t flag, bool condition)
 	}
 }
 
-bool M68000::EvaluateCondition(int condition) const
+bool M68000::EvaluateCondition() const
 {
+	const int condition = (m_operation & 0b00001111'00000000) >> 8;
+
 	switch (condition)
 	{
 	case 0b0000: // True
@@ -1150,10 +1152,9 @@ bool M68000::Opcode_subq(int& delay)
 
 bool M68000::Opcode_bcc(int& delay)
 {
-	const int condition = (m_operation & 0b00001111'00000000) >> 8;
 	int32_t internalDisp = m_operation & 0x00ff;
 
-	if (EvaluateCondition(condition))
+	if (EvaluateCondition())
 	{
 		int32_t displacement;
 
@@ -1223,9 +1224,7 @@ bool M68000::Opcode_cmpi(int& delay)
 
 bool M68000::Opcode_dbcc(int& delay)
 {
-	const int condition = (m_operation & 0b00001111'00000000) >> 8;
-
-	if (EvaluateCondition(condition))
+	if (EvaluateCondition())
 	{
 		delay = 2;
 	}
@@ -2103,6 +2102,143 @@ bool M68000::Opcode_neg(int& delay)
 	{
 		delay += 1;
 	}
+
+	return true;
+}
+
+bool M68000::Opcode_move_usp(int& delay)
+{
+	// Supervisor mode only
+
+	const bool toAddressReg = (m_operation & 0b1000) != 0;
+	const int reg = m_operation & 0b111;
+
+	if (toAddressReg)
+	{
+		m_regs.a[reg] = m_regs.altA7;
+	}
+	else
+	{
+		m_regs.altA7 = m_regs.a[reg];
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_scc(int& delay)
+{
+	// Note: On the 68000, the EA value is read (despite being unused),
+	// this is fixed on later processors.
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	if (EvaluateCondition())
+	{
+		eaValue = 0xff;
+		if (m_ea[0].type == EffectiveAddressType::DataRegister)
+		{
+			delay += 1;
+		}
+	}
+	else
+	{
+		eaValue = 0x00;
+	}
+
+	if (!SetEaValue(m_ea[0], m_opcodeSize, eaValue))
+		return false;
+
+	return true;
+}
+
+bool M68000::Opcode_bitwise_to_status(int& delay)
+{
+	const auto op = m_operation & 0b00001110'0000000;
+
+	uint16_t value = m_regs.status;
+
+	if (op == 0x0000) // or
+	{
+		value |= m_immediateValue;
+	}
+	else if (op == 0x0200) // and
+	{
+		value &= m_immediateValue;
+	}
+	else // eor
+	{
+		value ^= m_immediateValue;
+	}
+
+	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+	value = (m_regs.status & ~mask) | (value & mask);
+
+	SetStatusRegister(value);
+
+	// TODO : timing guide report a third bus read but what could it be?
+	delay += 6;
+
+	return true;
+}
+
+bool M68000::Opcode_pea(int& delay)
+{
+	m_regs.a[7] -= 4;
+	WriteBusLong(m_regs.a[7], m_ea[0].addrIdx);
+
+	return true;
+}
+
+bool M68000::Opcode_move_from_sr(int& delay)
+{
+	if (!SetEaValue(m_ea[0], 2, m_regs.status))
+		return false;
+
+	if (m_ea[0].type == EffectiveAddressType::DataRegister)
+	{
+		delay += 1;
+	}
+
+	return true;
+}
+
+bool M68000::Opcode_move_to_sr(int& delay)
+{
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], 2, eaValue))
+		return false;
+
+	SetStatusRegister(uint16_t(eaValue));
+
+	delay += 4;
+
+	return true;
+}
+
+bool M68000::Opcode_move_to_ccr(int& delay)
+{
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], 2, eaValue))
+		return false;
+
+	m_regs.status &= 0xff00;
+	m_regs.status |= (eaValue & 0x1f);
+
+	delay += 4;
+
+	return true;
+}
+
+bool M68000::Opcode_rte(int& delay)
+{
+	m_bus->ReadBusWord(m_regs.pc); // next pc prefetch - ignored
+	uint16_t sr = m_bus->ReadBusWord(m_regs.a[7]);
+	m_regs.a[7] += 2;
+	m_regs.pc = ReadBusLong(m_regs.a[7]);
+	m_regs.a[7] += 4;
+	SetStatusRegister(sr);
 
 	return true;
 }
