@@ -29,6 +29,9 @@ namespace cpu
 	constexpr uint16_t Overflow = 0b00010;
 	constexpr uint16_t Carry = 0b00001;
 
+	constexpr uint16_t AllFlags = 0b11111;
+	constexpr uint16_t AllFlagsMinusExtend = 0b01111;
+
 	namespace EA
 	{
 		enum Flags : uint16_t
@@ -186,6 +189,9 @@ namespace cpu
 		EA DecodeEffectiveAddress(uint32_t mode, uint32_t xn, int size, int& delay);
 		bool GetEaValue(const EA& ea, int size, uint64_t& value);
 		bool SetEaValue(const EA& ea, int size, uint64_t value);
+
+		uint64_t AluAdd(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask);
+		uint64_t AluSub(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask);
 
 	private:
 		IBus* m_bus;

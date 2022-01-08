@@ -990,6 +990,86 @@ bool M68000::EvaluateCondition(int condition) const
 	}
 }
 
+uint64_t M68000::AluAdd(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask)
+{
+	uint64_t result = a + b;
+
+	if (flagMask)
+	{
+		const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+		const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+		const auto signBefore = a & msb;
+		const auto signAfter = result & msb;
+
+		uint16_t newFlags = 0;
+
+		if ((result & ~mask) != 0)
+		{
+			newFlags |= Carry|Extend;
+		}
+
+		if ((result & msb) != 0)
+		{
+			newFlags |= Negative;
+		}
+		else if ((result & mask) == 0)
+		{
+			newFlags |= Zero;
+		}
+
+		if ((signBefore == (b & msb)) && (signBefore != signAfter))
+		{
+			newFlags |= Overflow;
+		}
+
+		m_regs.status &= ~flagMask;
+		m_regs.status |= newFlags & flagMask;
+	}
+
+	return result;
+}
+
+uint64_t M68000::AluSub(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask)
+{
+	uint64_t result = a - b;
+
+	if (flagMask)
+	{
+		const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
+		const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+		const auto signBefore = a & msb;
+		const auto signAfter = result & msb;
+
+		uint16_t newFlags = 0;
+
+		if ((result & ~mask) != 0)
+		{
+			newFlags |= Carry | Extend;
+		}
+
+		if ((result & msb) != 0)
+		{
+			newFlags |= Negative;
+		}
+		else if ((result & mask) == 0)
+		{
+			newFlags |= Zero;
+		}
+
+		if ((signBefore != (b & msb)) && (signBefore != signAfter))
+		{
+			newFlags |= Overflow;
+		}
+
+		m_regs.status &= ~flagMask;
+		m_regs.status |= newFlags & flagMask;
+	}
+
+	return result;
+}
+
 bool M68000::UnimplementOpcode(int& delay)
 {
 	return false;
@@ -1055,25 +1135,12 @@ bool M68000::Opcode_subq(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
 		return false;
 
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = value & msb;
-
 	auto subValue = (m_operation & 0b00001110'00000000) >> 9;
 	if (subValue == 0)
 		subValue = 8;
 
-	value -= subValue;
-
-	if (m_ea[0].type != EffectiveAddressType::AddressRegister)
-	{
-		const auto signAfter = value & msb;
-		SetFlag(Zero, (value & mask) == 0);
-		SetFlag(Negative, signAfter != 0);
-		SetFlag(Overflow, signBefore != 0 && signAfter == 0);
-		SetFlag(Carry | Extend, (value & (msb << 1)) != 0);
-	}
+	const uint16_t flagMask = (m_ea[0].type != EffectiveAddressType::AddressRegister) ? AllFlags : 0;
+	value = AluSub(value, subValue, m_opcodeSize, flagMask);
 
 	if (!SetEaValue(m_ea[0], m_opcodeSize, value))
 		return false;
@@ -1131,17 +1198,7 @@ bool M68000::Opcode_cmpa(int& delay)
 		srcValue = SignExtend(uint16_t(srcValue));
 	}
 
-	uint64_t result = destValue - srcValue;
-
-	const uint64_t mask = 0xffffffff;
-	const uint64_t msb = 0x8000000;
-
-	const auto signBefore = destValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, ((signBefore ^ (srcValue & msb)) != 0) && (signBefore != signAfter));
-	SetFlag(Carry, (result & (msb << 1)) != 0);
+	AluSub(destValue, srcValue, 4, AllFlagsMinusExtend);
 
 	delay += 1;
 
@@ -1154,17 +1211,7 @@ bool M68000::Opcode_cmpi(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, destValue))
 		return false;
 
-	uint64_t result = destValue - m_immediateValue;
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = destValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, ((m_immediateValue & msb) != signBefore) && (signBefore != signAfter));
-	SetFlag(Carry, (result & (msb << 1)) != 0);
+	AluSub(destValue, m_immediateValue, m_opcodeSize, AllFlagsMinusExtend);
 
 	if (m_opcodeSize == 4)
 	{
@@ -1281,7 +1328,7 @@ bool M68000::Opcode_add(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	const uint64_t result = regValue + eaValue;
+	const uint64_t result = AluAdd(regValue, eaValue, m_opcodeSize, AllFlags);
 
 	if (ToEa)
 	{
@@ -1302,17 +1349,6 @@ bool M68000::Opcode_add(int& delay)
 			}
 		}
 	}
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = regValue & msb;
-	const auto signAfter = result & msb;
-
-	SetFlag(Carry|Extend, (result & ~mask) != 0);
-	SetFlag(Negative, (result & msb) != 0);
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Overflow, (signBefore == (eaValue & msb)) && (signBefore != signAfter));
 
 	return true;
 }
@@ -1426,17 +1462,7 @@ bool M68000::Opcode_cmp(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, srcValue))
 		return false;
 
-	uint64_t result = destValue - srcValue;
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = destValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, ((signBefore ^ (srcValue & msb)) != 0) && (signBefore != signAfter));
-	SetFlag(Carry, (result & (msb << 1)) != 0);
+	AluSub(destValue, srcValue, m_opcodeSize, AllFlagsMinusExtend);
 
 	if (m_opcodeSize == 4)
 	{
@@ -1493,28 +1519,18 @@ bool M68000::Opcode_sub(int& delay)
 	uint64_t result;
 	if (ToEa)
 	{
-		result = eaValue - regValue;
+		result = AluSub(eaValue, regValue, m_opcodeSize, AllFlags);
 		SetEaValue(m_ea[0], m_opcodeSize, result);
 	}
 	else
 	{
-		result = regValue - eaValue;
+		result = AluSub(regValue, eaValue, m_opcodeSize, AllFlags);
 		SetReg(m_regs.d[reg], m_opcodeSize, uint32_t(result));
 		if (m_opcodeSize == 4)
 		{
 			delay += 1;
 		}
 	}
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = regValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, ((signBefore ^ (eaValue & msb)) != 0) && (signBefore != signAfter));
-	SetFlag(Carry|Extend, (result & (msb << 1)) != 0);
 
 	return true;
 }
@@ -1767,18 +1783,9 @@ bool M68000::Opcode_subi(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	uint64_t result = eaValue - m_immediateValue;
+	const uint64_t result = AluSub(eaValue, m_immediateValue, m_opcodeSize, AllFlags);
+
 	SetEaValue(m_ea[0], m_opcodeSize, result);
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = eaValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, ((signBefore ^ (m_immediateValue & msb)) != 0) && (signBefore != signAfter));
-	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
 
 	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
 	{
@@ -1925,21 +1932,8 @@ bool M68000::Opcode_addq(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
 		return false;
 
-	const auto result = value + addValue;
-
-	if (m_ea[0].type != EffectiveAddressType::AddressRegister)
-	{
-		const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-		const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-		const auto signBefore = value & msb;
-		const auto signAfter = result & msb;
-
-		SetFlag(Zero, (result & mask) == 0);
-		SetFlag(Negative, signAfter != 0);
-		SetFlag(Overflow, signBefore == 0 && signAfter != 0);
-		SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
-	}
+	const uint16_t flagMask = (m_ea[0].type != EffectiveAddressType::AddressRegister) ? AllFlags : 0;
+	const auto result = AluAdd(value, addValue, m_opcodeSize, flagMask);
 
 	if (!SetEaValue(m_ea[0], m_opcodeSize, result))
 		return false;
@@ -2083,18 +2077,9 @@ bool M68000::Opcode_addi(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	uint64_t result = m_immediateValue + eaValue;
+	const uint64_t result = AluAdd(eaValue, m_immediateValue, m_opcodeSize, AllFlags);
+
 	SetEaValue(m_ea[0], m_opcodeSize, result);
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = eaValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, (signBefore == (m_immediateValue & msb)) && (signBefore != signAfter));
-	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
 
 	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
 	{
@@ -2110,18 +2095,9 @@ bool M68000::Opcode_neg(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	uint64_t result = 0 - eaValue;
+	const uint64_t result = AluSub(0, eaValue, m_opcodeSize, AllFlags);
+
 	SetEaValue(m_ea[0], m_opcodeSize, result);
-
-	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
-	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
-
-	const auto signBefore = eaValue & msb;
-	const auto signAfter = result & msb;
-	SetFlag(Zero, (result & mask) == 0);
-	SetFlag(Negative, signAfter != 0);
-	SetFlag(Overflow, (signBefore != 0) && (signAfter != 0));
-	SetFlag(Carry | Extend, (result & (msb << 1)) != 0);
 
 	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
 	{
