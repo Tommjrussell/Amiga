@@ -29,6 +29,7 @@ namespace guru
 		void DrawCpuRegisters();
 		void DrawControls();
 		void DrawSystemInterrupts();
+		void DrawDMA();
 
 		void UpdateAssembly();
 

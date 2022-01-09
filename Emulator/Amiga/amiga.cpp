@@ -858,6 +858,11 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 
 	switch (am::Register(regNum & ~1))
 	{
+
+	case am::Register::DMACON:
+		UpdateFlagRegister(Register::DMACONR, value & 0x87ff);
+		break;
+
 	case am::Register::INTENA:
 		UpdateFlagRegister(am::Register::INTENAR, value);
 		break;

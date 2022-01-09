@@ -72,6 +72,11 @@ bool guru::Debugger::Draw()
 			DrawSystemInterrupts();
 		}
 
+		if (ImGui::CollapsingHeader("DMA"))
+		{
+			DrawDMA();
+		}
+
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 	}
@@ -231,6 +236,10 @@ void guru::Debugger::DrawCpuRegisters()
 
 void guru::Debugger::DrawControls()
 {
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+	ImGui::BeginChild("Controls", ImVec2(0, 100), true, 0);
+
 	const bool running = m_app->IsRunning();
 	auto regs = m_amiga->GetCpu()->GetRegisters();
 
@@ -321,6 +330,8 @@ void guru::Debugger::DrawControls()
 		}
 	}
 
+	ImGui::EndChild();
+	ImGui::PopStyleVar(2);
 }
 
 void guru::Debugger::DrawSystemInterrupts()
@@ -380,5 +391,68 @@ void guru::Debugger::DrawSystemInterrupts()
 			ImGui::NextColumn();
 		}
 	}
+	ImGui::Columns(1);
+}
+
+void guru::Debugger::DrawDMA()
+{
+	static const char* bits[15] =
+	{
+		"BBUSY", "BZERO", nullptr, nullptr, "BLTPRI", "DMAEN", "BPLEN", "COPEN", "BLTEN", "SPREN", "DSKEN", "AUD3EN", "AUD2EN", "AUD1EN", "AUD0EN"
+	};
+
+	static const char* desc[15] =
+	{
+		"BBUSY\nBlitter busy status bit (read only)",
+		"BZERO\nBlitter logic  zero status bit\n(read only).",
+		nullptr,
+		nullptr,
+		"BLTPRI\nBlitter DMA priority\n"
+			"(over CPU micro) (also called\n"
+			"\"blitter nasty\") (disables /BLS\n"
+			"pin, preventing micro from\n"
+			"stealing any bus cycles while\n"
+			"blitter DMA is running).",
+		"DMAEN\nEnable all DMA",
+		"BPLEN\nBitplane DMA enable",
+		"COPEN\nCopper DMA enable",
+		"BLTEN\nBlitter DMA enable",
+		"SPREN\nSprite DMA enable",
+		"DSKEN\nDisk DMA enable",
+		"AUD3EN\nAudio channel 3 DMA enable",
+		"AUD2EN\nAudio channel 2 DMA enable",
+		"AUD1EN\nAudio channel 1 DMA enable",
+		"AUD0EN\nAudio channel 0 DMA enable",
+	};
+
+	const uint16_t dmaconr = m_amiga->PeekRegister(am::Register::DMACONR);
+
+	ImGui::Columns(5, NULL, false);
+
+	for (int row = 0; row < 3; row++)
+	{
+		int rowStart = row * 5;
+		int rowEnd = rowStart + 5;
+
+		for (int i = rowStart; i < rowEnd; i++)
+		{
+			if (bits[i] != nullptr)
+			{
+				ImGui::Text(bits[i]);
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip(desc[i]);
+
+				bool set = (dmaconr & (1 << (14 - i))) != 0;
+
+				ImGui::Checkbox("", &set);
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip(desc[i]);
+			}
+
+			ImGui::NextColumn();
+
+		}
+	}
+	ImGui::Columns(1);
 
 }
