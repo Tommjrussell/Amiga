@@ -308,6 +308,19 @@ void guru::Debugger::DrawControls()
 	ImGui::PushItemWidth(64);
 	ImGui::InputInt("", (int*)&m_breakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue);
 	ImGui::PopItemWidth();
+
+	if (ImGui::Checkbox("Break on unimplemented register", &m_breakOnUnimplementedRegister))
+	{
+		if (m_breakOnUnimplementedRegister)
+		{
+			m_amiga->EnableBreakOnRegister(0xffff'ffff);
+		}
+		else
+		{
+			m_amiga->DisableBreakOnRegister();
+		}
+	}
+
 }
 
 void guru::Debugger::DrawSystemInterrupts()

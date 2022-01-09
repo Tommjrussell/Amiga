@@ -72,6 +72,8 @@ namespace am
 
 		void SetBreakpoint(uint32_t addr);
 		void ClearBreakpoint();
+		void EnableBreakOnRegister(uint32_t regAddr);
+		void DisableBreakOnRegister();
 
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
@@ -119,9 +121,13 @@ namespace am
 		std::vector<uint8_t> m_slowRam;
 
 		bool m_romOverlayEnabled = true;
+
 		bool m_breakpointEnabled = false;
+		bool m_breakOnRegisterEnabled = false;
+		bool m_breakAtNextInstruction = false;
 
 		uint32_t m_breakpoint  = 0;
+		uint32_t m_breakAtRegister = 0;
 
 		uint32_t m_sharedBusRws = 0;
 		uint32_t m_exclusiveBusRws = 0;

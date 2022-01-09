@@ -348,6 +348,17 @@ void am::Amiga::ClearBreakpoint()
 	m_breakpointEnabled = false;
 }
 
+void am::Amiga::EnableBreakOnRegister(uint32_t regAddr)
+{
+	m_breakAtRegister = regAddr;
+	m_breakOnRegisterEnabled = true;
+}
+
+void am::Amiga::DisableBreakOnRegister()
+{
+	m_breakOnRegisterEnabled = false;
+}
+
 uint8_t am::Amiga::PeekByte(uint32_t addr) const
 {
 	auto [type, mem] = const_cast<Amiga*>(this)->GetMappedMemory(addr);
@@ -609,6 +620,7 @@ bool am::Amiga::ExecuteOneCpuInstruction()
 
 	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode)
 	{
+		m_breakAtNextInstruction = false;
 		DoOneTick();
 	}
 
@@ -645,8 +657,12 @@ bool am::Amiga::DoOneTick()
 
 	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode && CpuReady())
 	{
-		if (m_breakpointEnabled && m_m68000->GetPC() == m_breakpoint)
+		if (m_breakAtNextInstruction || (m_breakpointEnabled && m_m68000->GetPC() == m_breakpoint))
+		{
+			m_breakAtNextInstruction = false;
 			return false;
+		}
+
 
 		running = m_m68000->DecodeOneInstruction(m_cpuBusyTimer);
 	}
@@ -812,6 +828,11 @@ uint16_t am::Amiga::ReadRegister(uint32_t regNum)
 		return 0x0000;
 	}
 
+	if (m_breakOnRegisterEnabled && regNum == m_breakAtRegister)
+	{
+		m_breakAtNextInstruction = true;
+	}
+
 	const auto value = m_registers[regIndex];
 	return value;
 }
@@ -828,6 +849,11 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	if (regInfo.type != RegType::WriteOnly && regInfo.type != RegType::Strobe)
 		return;
 
+	if (m_breakOnRegisterEnabled && regNum == m_breakAtRegister)
+	{
+		m_breakAtNextInstruction = true;
+	}
+
 	m_registers[regIndex] = value;
 
 	switch (am::Register(regNum & ~1))
@@ -840,8 +866,14 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		UpdateFlagRegister(am::Register::INTREQR, value);
 		break;
 
+	// TODO : Implement Register behaviour
+
 	default:
-		// TODO : Implement Register behaviour
+		if (m_breakOnRegisterEnabled && m_breakAtRegister == 0xffff'ffff)
+		{
+			// Special value for breaking at unimplemented registers
+			m_breakAtNextInstruction = true;
+		}
 		break;
 	}
 }
