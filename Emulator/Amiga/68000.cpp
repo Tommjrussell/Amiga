@@ -353,8 +353,8 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,			//	tas     {ea:b}
 	&M68000::Opcode_tst,				//	tst.{s}   {ea}
 	&M68000::UnimplementOpcode,			//	trap    {v}
-	&M68000::UnimplementOpcode,			//	link    A{reg}, {immDis16}
-	&M68000::UnimplementOpcode,			//	unlk    A{reg}
+	&M68000::Opcode_link,				//	link    A{reg}, {immDis16}
+	&M68000::Opcode_unlk,				//	unlk    A{reg}
 	&M68000::Opcode_move_usp,			//	move    A{reg}, USP
 	&M68000::UnimplementOpcode,			//	reset
 	&M68000::UnimplementOpcode,			//	nop
@@ -387,7 +387,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_sub,				//	sub.{s}   D{REG}, {ea}
 	&M68000::Opcode_cmpa,				//	cmpa.{WL}  {ea}, A{REG}
 	&M68000::Opcode_cmp,				//	cmp.{s}   {ea}, D{REG}
-	&M68000::UnimplementOpcode,			//	cmpm.{s}  A{reg}+, A{REG}+
+	&M68000::Opcode_cmpm,				//	cmpm.{s}  A{reg}+, A{REG}+
 	&M68000::Opcode_bitwise,			//	eor.{s}   D{REG}, {ea}
 	&M68000::Opcode_mulu,				//	mulu    {ea}, D{REG}
 	&M68000::UnimplementOpcode,			//	muls    {ea}, D{REG}
@@ -399,18 +399,18 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,			//	addx.{s}  {m}
 	&M68000::Opcode_add,				//	add.{s}   {ea}, D{REG}
 	&M68000::Opcode_add,				//	add.{s}   D{REG}, {ea}
-	&M68000::UnimplementOpcode,			//	as{R}     {ea}
-	&M68000::Opcode_lsd_ea,				//	ls{R}     {ea}
-	&M68000::UnimplementOpcode,			//	rox{R}    {ea}
-	&M68000::UnimplementOpcode,			//	ro{R}     {ea}
-	&M68000::UnimplementOpcode,			//	as{R}.{s}   {q}, D{reg}
-	&M68000::Opcode_lsd_reg,			//	ls{R}.{s}   {q}, D{reg}
-	&M68000::UnimplementOpcode,			//	rox{R}.{s}  {q}, D{reg}
-	&M68000::UnimplementOpcode,			//	ro{R}.{s}   {q}, D{reg}
-	&M68000::UnimplementOpcode,			//	as{R}.{s}   D{REG}, D{reg}
-	&M68000::Opcode_lsd_reg,			//	ls{R}.{s}   D{REG}, D{reg}
-	&M68000::UnimplementOpcode,			//	rox{R}.{s}  D{REG}, D{reg}
-	&M68000::UnimplementOpcode,			//	ro{R}.{s}   D{REG}, D{reg}
+	&M68000::Opcode_shift_ea,			//	as{R}     {ea}
+	&M68000::Opcode_shift_ea,			//	ls{R}     {ea}
+	&M68000::Opcode_shift_ea,			//	rox{R}    {ea}
+	&M68000::Opcode_shift_ea,			//	ro{R}     {ea}
+	&M68000::Opcode_shift_reg,			//	as{R}.{s}   {q}, D{reg}
+	&M68000::Opcode_shift_reg,			//	ls{R}.{s}   {q}, D{reg}
+	&M68000::Opcode_shift_reg,			//	rox{R}.{s}  {q}, D{reg}
+	&M68000::Opcode_shift_reg,			//	ro{R}.{s}   {q}, D{reg}
+	&M68000::Opcode_shift_reg,			//	as{R}.{s}   D{REG}, D{reg}
+	&M68000::Opcode_shift_reg,			//	ls{R}.{s}   D{REG}, D{reg}
+	&M68000::Opcode_shift_reg,			//	rox{R}.{s}  D{REG}, D{reg}
+	&M68000::Opcode_shift_reg,			//	ro{R}.{s}   D{REG}, D{reg}
 };
 
 
@@ -1534,9 +1534,10 @@ bool M68000::Opcode_sub(int& delay)
 	return true;
 }
 
-bool M68000::Opcode_lsd_ea(int& delay)
+bool M68000::Opcode_shift_ea(int& delay)
 {
 	const bool toLeft = (m_operation & 0b00000001'00000000) != 0;
+	const auto op = (m_operation & 0b00000110'00000000);
 
 	uint64_t value;
 	if (!GetEaValue(m_ea[0], 2, value))
@@ -1545,15 +1546,53 @@ bool M68000::Opcode_lsd_ea(int& delay)
 	const uint64_t mask = 0xffff;
 	const uint64_t msb = 0x8000;
 
+	// all operations set Extend flag *except* ro(d)
+	const uint16_t flags = (op != 0x0600) ? Carry | Extend : Carry;
+
+	const bool extendIsSet = (m_regs.status & Extend) != 0;
+
 	if (toLeft)
 	{
-		SetFlag(Carry | Extend, (value & msb) != 0);
+		SetFlag(flags, (value & msb) != 0);
+
 		value <<= 1;
+
+		if (op == 0x0400) // roxl
+		{
+			if (extendIsSet)
+			{
+				value |= 1;
+			}
+		}
+		else if (op == 0x0600) // rol
+		{
+			value |= (value >> 16);
+		}
 	}
 	else
 	{
-		SetFlag(Carry | Extend, (value & 1) != 0);
-		value >>= 1;
+		SetFlag(flags, (value & 1) != 0);
+		if (op == 0x0000) // asr
+		{
+			value = int16_t(value) >> 1;
+		}
+		else if (op == 0x0200) // lsr
+		{
+			value >>= 1;
+		}
+		else if (op == 0x0400) // roxr
+		{
+			if (extendIsSet)
+			{
+				value |= 0x10000;
+			}
+			value >>= 1;
+		}
+		else  // ror
+		{
+			value |= (value & 1) << 16;
+			value >>= 1;
+		}
 	}
 
 	if (!SetEaValue(m_ea[0], 2, value))
@@ -1566,12 +1605,13 @@ bool M68000::Opcode_lsd_ea(int& delay)
 	return true;
 }
 
-bool M68000::Opcode_lsd_reg(int& delay)
+bool M68000::Opcode_shift_reg(int& delay)
 {
 	const bool toLeft = (m_operation & 0b00000001'00000000) != 0;
 	const bool regSpecifiesCount = (m_operation & 0b00000000'00100000) != 0;
 	int count = (m_operation & 0b00001110'00000000) >> 9;
 	const int reg = m_operation & 0b00000000'00000111;
+	const auto op = m_operation & 0b00000000'00011000;
 
 	uint64_t value = GetReg(m_regs.d[reg], m_opcodeSize);
 
@@ -1588,6 +1628,8 @@ bool M68000::Opcode_lsd_reg(int& delay)
 		count = 8;
 	}
 
+	const uint16_t flags = (op != 0x0018) ? Carry | Extend : Carry;
+
 	SetFlag(Carry, false);
 
 	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
@@ -1595,15 +1637,44 @@ bool M68000::Opcode_lsd_reg(int& delay)
 
 	for (int i = 0; i < count; i++)
 	{
+		const bool extendIsSet = (m_regs.status & Extend) != 0;
+
 		delay++;
 		if (toLeft)
 		{
-			SetFlag(Carry | Extend, (value & msb) != 0);
+			SetFlag(flags, (value & msb) != 0);
 			value <<= 1;
+
+			if (op == 0x0010) // roxl
+			{
+				if (extendIsSet)
+				{
+					value |= 1;
+				}
+			}
+			else if (op ==  0x0018) // rol
+			{
+				value |= ((value >> (m_opcodeSize * 8) & 1));
+			}
 		}
 		else
 		{
-			SetFlag(Carry | Extend, (value & 1) != 0);
+			SetFlag(flags, (value & 1) != 0);
+			if (op == 0x0000) // asr
+			{
+				value |= ((value & msb) << 1);
+			}
+			else if (op == 0x0010) // roxr
+			{
+				if (extendIsSet)
+				{
+					value |= (msb << 1);
+				}
+			}
+			else if (op == 0x0018)  // ror
+			{
+				value |= (value & 1) << (m_opcodeSize * 8);
+			}
 			value >>= 1;
 		}
 	}
@@ -2239,6 +2310,45 @@ bool M68000::Opcode_rte(int& delay)
 	m_regs.pc = ReadBusLong(m_regs.a[7]);
 	m_regs.a[7] += 4;
 	SetStatusRegister(sr);
+
+	return true;
+}
+
+bool M68000::Opcode_link(int& delay)
+{
+	const auto reg = (m_operation & 0b00000000'00000111);
+
+	m_regs.a[7] -= 4;
+	WriteBusLong(m_regs.a[7], m_regs.a[reg]);
+	m_regs.a[reg] = m_regs.a[7];
+	m_regs.a[7] += int16_t(m_immediateValue);
+
+	return true;
+}
+
+bool M68000::Opcode_unlk(int& delay)
+{
+	const auto reg = (m_operation & 0b00000000'00000111);
+
+	m_regs.a[7] = m_regs.a[reg];
+	m_regs.a[reg] = ReadBusLong(m_regs.a[7]);
+	m_regs.a[7] += 4;
+
+	return true;
+}
+
+bool M68000::Opcode_cmpm(int& delay)
+{
+	const auto ay = (m_operation & 0b00000000'00000111);
+	const auto ax = (m_operation & 0b00001110'00000000) >> 9;
+
+	const uint64_t axVal = ReadBus(m_regs.a[ax], m_opcodeSize);
+	const uint64_t ayVal = ReadBus(m_regs.a[ay], m_opcodeSize);
+
+	AluSub(axVal, ayVal, m_opcodeSize, AllFlagsMinusExtend);
+
+	m_regs.a[ax] += m_opcodeSize;
+	m_regs.a[ay] += m_opcodeSize;
 
 	return true;
 }

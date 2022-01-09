@@ -135,8 +135,8 @@ namespace cpu
 		bool Opcode_jmp(int& delay);
 		bool Opcode_moveq(int& delay);
 		bool Opcode_sub(int& delay);
-		bool Opcode_lsd_reg(int& delay);
-		bool Opcode_lsd_ea(int& delay);
+		bool Opcode_shift_reg(int& delay); // as{d}, ls{d}, ro{d}, rox{d} -> reg
+		bool Opcode_shift_ea(int& delay); // as{d}, ls{d}, ro{d}, rox{d} -> ea
 		bool Opcode_swap(int& delay);
 		bool Opcode_movem(int& delay);
 		bool Opcode_subi(int& delay);
@@ -159,6 +159,9 @@ namespace cpu
 		bool Opcode_move_to_sr(int& delay);
 		bool Opcode_move_to_ccr(int& delay);
 		bool Opcode_rte(int& delay);
+		bool Opcode_link(int& delay);
+		bool Opcode_unlk(int& delay);
+		bool Opcode_cmpm(int& delay);
 
 	private:
 
