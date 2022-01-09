@@ -26,6 +26,10 @@ namespace guru
 
 	private:
 
+		void DrawCpuRegisters();
+		void DrawControls();
+		void DrawSystemInterrupts();
+
 		void UpdateAssembly();
 
 	private:

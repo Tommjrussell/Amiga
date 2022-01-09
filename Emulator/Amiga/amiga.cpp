@@ -774,6 +774,15 @@ uint8_t am::Amiga::ReadCIA(int num, int port)
 	}
 }
 
+uint16_t am::Amiga::PeekRegister(am::Register r) const
+{
+	const auto index = uint32_t(r) / 2;
+	if (index >= m_registers.size())
+		return 0;
+
+	return m_registers[index];
+}
+
 uint16_t am::Amiga::UpdateFlagRegister(am::Register r, uint16_t value)
 {
 	auto& reg = Reg(r);

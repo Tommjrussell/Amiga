@@ -55,6 +55,8 @@ namespace am
 		uint16_t PeekWord(uint32_t addr) const;
 		void PokeByte(uint32_t addr, uint8_t value);
 
+		uint16_t PeekRegister(am::Register r) const;
+
 		bool ExecuteFor(uint64_t cclocks);
 		bool ExecuteOneCpuInstruction();
 		bool ExecuteToEndOfCpuInstruction();
