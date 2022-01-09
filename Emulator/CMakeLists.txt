@@ -17,7 +17,8 @@ add_executable (AmigaEmulator
 	"memory_editor.cpp" "memory_editor.h"
 	"amiga/amiga.cpp" "amiga/amiga.h"
 	"amiga/disassembler.cpp" "amiga/disassembler.h"
-	"amiga/68000.h" "amiga/68000.cpp")
+	"amiga/68000.h" "amiga/68000.cpp"
+	"amiga/registers.h")
 
 target_include_directories(AmigaEmulator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

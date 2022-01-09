@@ -9,6 +9,8 @@
 
 namespace am
 {
+	enum class Register : uint32_t;
+
 	enum class ChipRamConfig : uint32_t
 	{
 		ChipRam256k = 256 * 1024,
@@ -89,6 +91,16 @@ namespace am
 		void WriteCIA(int num, int port, uint8_t data);
 		uint8_t ReadCIA(int num, int port);
 
+		uint16_t ReadRegister(uint32_t regNum);
+		void WriteRegister(uint32_t regNum, uint16_t value);
+
+		uint16_t& Reg(am::Register r)
+		{
+			return m_registers[uint32_t(r) / 2];
+		}
+
+		uint16_t UpdateFlagRegister(am::Register r, uint16_t value);
+
 	private:
 
 		struct CIA
@@ -114,6 +126,8 @@ namespace am
 
 		uint64_t m_totalCClocks = 0;
 		int m_cpuBusyTimer = 0;
+
+		std::vector<uint16_t> m_registers;
 
 		CIA m_cia[2];
 
