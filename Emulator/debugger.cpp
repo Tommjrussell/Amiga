@@ -269,10 +269,27 @@ void guru::Debugger::UpdateAssembly()
 
 	m_disassembler->pc = earliestAddr;
 
+	bool seenPc = false;
+
 	for (int lines = 0; lines < 48; lines++)
 	{
+		bool onPc =  (m_disassembler->pc == pc);
+		if (onPc && !seenPc)
+		{
+			seenPc = true;
+		}
+		else if (!seenPc && m_disassembler->pc > pc)
+		{
+			// Nasty cludge. Force the disassembler to the PC if we've skipped
+			// over it. Usually caused by the presence of padding or data bytes
+			// between an earlier visited instruction and the PC.
+			// (TODO : improve this)
+			m_disassembler->pc = pc;
+			seenPc = onPc = true;
+		}
+
 		std::string line = HexToString(m_disassembler->pc);
-		line += (m_disassembler->pc == pc) ? " > " : " : ";
+		line += onPc ? " > " : " : ";
 		line += m_disassembler->Disassemble();
 		m_instructions.emplace_back(line);
 	}
