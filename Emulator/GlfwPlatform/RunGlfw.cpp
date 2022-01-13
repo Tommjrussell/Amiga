@@ -3,6 +3,8 @@
 
 #include "GlfwPlatform/shader.h"
 
+#include "amiga\screen_buffer.h"
+
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -37,15 +39,10 @@ namespace
 
 namespace guru
 {
-	const int kScreenWidth = 672;
-	const int kScreenHeight = 272;
-
 	const uint32_t kScreenTextureWidth = 1024;
 	const uint32_t kScreenTextureHeight = 512;
 
-	using ColourRef = uint32_t;
-	using TextureData = std::array<ColourRef, kScreenTextureWidth* kScreenTextureHeight>;
-	using ScreenBuffer = std::array<ColourRef, kScreenWidth* kScreenHeight>;
+	using TextureData = std::array<am::ColourRef, kScreenTextureWidth* kScreenTextureHeight>;
 
 	class Renderer
 	{
@@ -53,7 +50,7 @@ namespace guru
 		~Renderer();
 
 		bool Init(const std::string& resDir, int width, int height);
-		void SetScreenImage(const ScreenBuffer* screen);
+		void SetScreenImage(const am::ScreenBuffer* screen);
 		void DrawScreen(int screenWidth, int screenHeight, bool useCrtEmulation, bool evenFrame, int magAmount);
 
 		GLFWwindow* GetWindow() { return m_window; }
@@ -142,8 +139,8 @@ namespace guru
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-		m_textureUVdata[2] = m_textureUVdata[6] = float(kScreenWidth);
-		m_textureUVdata[1] = m_textureUVdata[3] = float(kScreenHeight);
+		m_textureUVdata[2] = m_textureUVdata[6] = float(am::kScreenBufferWidth);
+		m_textureUVdata[1] = m_textureUVdata[3] = float(am::kScreenBufferHeight);
 
 		glGenBuffers(1, &m_uvBuffer);
 		glBindBuffer(GL_ARRAY_BUFFER, m_uvBuffer);
@@ -162,18 +159,18 @@ namespace guru
 		return true;
 	}
 
-	void Renderer::SetScreenImage(const ScreenBuffer* screen)
+	void Renderer::SetScreenImage(const am::ScreenBuffer* screen)
 	{
 		glBindTexture(GL_TEXTURE_2D, m_texture);
 
 		auto destPtr = m_textureData->data();
 		auto srcPtr = screen->data();
 
-		for (int y = 0; y < kScreenHeight; y++)
+		for (int y = 0; y < am::kScreenBufferHeight; y++)
 		{
-			::memcpy(destPtr, srcPtr, kScreenWidth * sizeof ColourRef);
+			::memcpy(destPtr, srcPtr, am::kScreenBufferWidth * sizeof am::ColourRef);
 			destPtr += kScreenTextureWidth;
-			srcPtr += kScreenWidth;
+			srcPtr += am::kScreenBufferWidth;
 		}
 
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, kScreenTextureWidth, kScreenTextureHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_textureData->data());
@@ -264,7 +261,7 @@ namespace guru
 		glViewport(0, 0, m_displayWidth, m_displayHeight);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		DrawScreen(kScreenWidth, kScreenHeight, useCrtEmulation, false, 1);
+		DrawScreen(am::kScreenBufferWidth, am::kScreenBufferHeight, useCrtEmulation, false, 1);
 
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -284,8 +281,8 @@ namespace guru
 
 		bool appRunning = true;
 
-		auto screen = std::make_unique<ScreenBuffer>();
-		screen->fill(ColourRef(0xffffffff));
+		auto screen = std::make_unique<am::ScreenBuffer>();
+		screen->fill(am::ColourRef(0xffffffff));
 
 		while (appRunning && glfwWindowShouldClose(renderer.GetWindow()) == 0)
 		{

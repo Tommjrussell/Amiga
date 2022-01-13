@@ -1,6 +1,7 @@
 #pragma once
 
 #include "68000.h"
+#include "screen_buffer.h"
 
 #include <stdint.h>
 #include <tuple>
@@ -138,6 +139,8 @@ namespace am
 		std::vector<uint16_t> m_registers;
 
 		CIA m_cia[2];
+
+		std::array<ColourRef, 64> m_palette;
 
 		std::unique_ptr<cpu::M68000> m_m68000;
 	};

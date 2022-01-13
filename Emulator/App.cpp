@@ -68,6 +68,8 @@ bool guru::AmigaApp::Update()
 
 void guru::AmigaApp::Render()
 {
+	//ImGui::ShowDemoWindow();
+
 	if (ImGui::BeginMainMenuBar())
 	{
 		if (ImGui::BeginMenu("Main"))

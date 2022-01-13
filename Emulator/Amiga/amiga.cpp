@@ -326,6 +326,8 @@ am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom)
 
 	m_registers.resize(_countof(registerInfo), 0x0000);
 
+	m_palette.fill(ColourRef(0));
+
 	m_m68000 = std::make_unique<cpu::M68000>(this);
 
 	int delay;
@@ -870,6 +872,57 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	case am::Register::INTREQ:
 		UpdateFlagRegister(am::Register::INTREQR, value);
 		break;
+
+	case am::Register::COLOR00:
+	case am::Register::COLOR01:
+	case am::Register::COLOR02:
+	case am::Register::COLOR03:
+	case am::Register::COLOR04:
+	case am::Register::COLOR05:
+	case am::Register::COLOR06:
+	case am::Register::COLOR07:
+	case am::Register::COLOR08:
+	case am::Register::COLOR09:
+	case am::Register::COLOR10:
+	case am::Register::COLOR11:
+	case am::Register::COLOR12:
+	case am::Register::COLOR13:
+	case am::Register::COLOR14:
+	case am::Register::COLOR15:
+	case am::Register::COLOR16:
+	case am::Register::COLOR17:
+	case am::Register::COLOR18:
+	case am::Register::COLOR19:
+	case am::Register::COLOR20:
+	case am::Register::COLOR21:
+	case am::Register::COLOR22:
+	case am::Register::COLOR23:
+	case am::Register::COLOR24:
+	case am::Register::COLOR25:
+	case am::Register::COLOR26:
+	case am::Register::COLOR27:
+	case am::Register::COLOR28:
+	case am::Register::COLOR29:
+	case am::Register::COLOR30:
+	case am::Register::COLOR31:
+	{
+		m_registers[regIndex] &= 0x0fff;
+		uint32_t r = (value & 0x0f00) >> 8;
+		uint32_t g = (value & 0x00f0) >> 4;
+		uint32_t b = (value & 0x000f) >> 0;
+		const auto colourIndex = (regNum - uint32_t(Register::COLOR00)) / 2;
+		auto rr = r | (r << 4);
+		auto gg = g | (g << 4);
+		auto bb = b | (b << 4);
+		m_palette[colourIndex] = MakeColourRef(rr, gg, bb);
+
+		// Halve the brightness
+		rr = (rr >> 1) & 0xf7;
+		gg = (gg >> 1) & 0xf7;
+		bb = (bb >> 1) & 0xf7;
+		m_palette[colourIndex + 32] = MakeColourRef(rr, gg, bb);
+	}
+	break;
 
 	// TODO : Implement Register behaviour
 
