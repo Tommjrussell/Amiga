@@ -38,7 +38,13 @@ namespace guru
 		std::unique_ptr<DebuggerMemoryInterface> m_memory;
 		std::unique_ptr<am::Disassembler> m_disassembler;
 
-		std::vector<std::string> m_instructions;
+		struct DisassemblyLine
+		{
+			uint32_t addr;
+			std::string text;
+		};
+
+		std::vector<DisassemblyLine> m_disassembly;
 
 		guru::AmigaApp* m_app;
 		am::Amiga* m_amiga;

@@ -95,14 +95,24 @@ bool guru::Debugger::Draw()
 		}
 		else
 		{
-			if (m_instructions.empty())
+			if (m_disassembly.empty())
 			{
 				UpdateAssembly();
 			}
 
-			for (auto&l : m_instructions)
+			auto cpu = m_amiga->GetCpu();
+			auto pc = cpu->GetPC();
+
+			for (auto& d : m_disassembly)
 			{
-				ImGui::Text(l.c_str());
+				if (d.addr == pc)
+				{
+					ImGui::Selectable(d.text.c_str(), true);
+				}
+				else
+				{
+					ImGui::Text(d.text.c_str());
+				}
 			}
 		}
 
@@ -155,10 +165,11 @@ void guru::Debugger::UpdateAssembly()
 			seenPc = onPc = true;
 		}
 
-		std::string line = HexToString(m_disassembler->pc);
+		const uint32_t addr = m_disassembler->pc;
+		std::string line = HexToString(addr);
 		line += onPc ? " > " : " : ";
 		line += m_disassembler->Disassemble();
-		m_instructions.emplace_back(line);
+		m_disassembly.emplace_back(DisassemblyLine{addr, line});
 	}
 }
 
@@ -200,7 +211,7 @@ void guru::Debugger::DrawCpuRegisters()
 	if (ImGui::InputInt("pc", (int*)&regs.pc, 0, 0, pcDislayFlags))
 	{
 		m_amiga->SetPC(regs.pc);
-		m_instructions.clear();
+		m_disassembly.clear();
 	}
 
 	ImGui::InputInt(m_amiga->GetCpu()->InSupervisorMode() ? "usp" : "ssp",
@@ -268,7 +279,7 @@ void guru::Debugger::DrawControls()
 	{
 		m_amiga->ClearBreakpoint();
 		m_app->SetRunning(true);
-		m_instructions.clear();
+		m_disassembly.clear();
 	}
 
 	ImGui::SameLine();
@@ -283,7 +294,7 @@ void guru::Debugger::DrawControls()
 	{
 		m_amiga->ClearBreakpoint();
 		m_amiga->ExecuteOneCpuInstruction();
-		m_instructions.clear();
+		m_disassembly.clear();
 	}
 
 
@@ -295,7 +306,7 @@ void guru::Debugger::DrawControls()
 		m_disassembler->Disassemble(); // ignore disassembled string
 		m_amiga->SetBreakpoint(m_disassembler->pc);
 		m_app->SetRunning(true);
-		m_instructions.clear();
+		m_disassembly.clear();
 	}
 
 	ImGui::SameLine();
@@ -303,14 +314,14 @@ void guru::Debugger::DrawControls()
 	{
 		m_amiga->ClearBreakpoint();
 		m_amiga->Reset();
-		m_instructions.clear();
+		m_disassembly.clear();
 	}
 
 	if (ActiveButton("Run Until :", !running))
 	{
 		m_amiga->SetBreakpoint(m_breakpoint);
 		m_app->SetRunning(true);
-		m_instructions.clear();
+		m_disassembly.clear();
 	}
 
 	ImGui::SameLine();
