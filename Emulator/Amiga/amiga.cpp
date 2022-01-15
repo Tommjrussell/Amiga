@@ -708,6 +708,8 @@ void am::Amiga::Reset()
 	::memset(m_chipRam.data(), 0, m_chipRam.size());
 	::memset(m_slowRam.data(), 0, m_slowRam.size());
 
+	m_bitplane = {};
+
 	ResetCIA(0);
 	ResetCIA(1);
 
@@ -873,6 +875,33 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		UpdateFlagRegister(am::Register::INTREQR, value);
 		break;
 
+	case am::Register::BPLCON0:
+		m_bitplane.hires = ((value & 0x8000) != 0);
+		m_bitplane.numPlanesEnabled = (value & 0x7000) >> 12;
+		m_bitplane.ham = ((value & 0x0800) != 0);
+		m_bitplane.doublePlayfield = (value & 0x0400) != 0;
+		m_bitplane.compositeColourEnabled = ((value & 0x0200) != 0);
+		m_bitplane.genlockAudioEnabled = ((value & 0x0100) != 0);
+		m_bitplane.lightPenEnabled = ((value & 0x0008) != 0);
+		m_bitplane.interlaced = ((value & 0x0004) != 0);
+		m_bitplane.externalResync = (value & 0x0002) != 0;
+		break;
+
+	case am::Register::BPLCON1:
+		m_bitplane.playfieldDelay[0] = (value & 0x000f) >> 0;
+		m_bitplane.playfieldDelay[1] = (value & 0x00f0) >> 4;
+		break;
+
+	case am::Register::BPLCON2:
+		m_bitplane.playfieldPriority = (value >> 6) & 1;
+		m_bitplane.playfieldSpritePri[0] = value & 7;
+		m_bitplane.playfieldSpritePri[1] = (value >> 3) & 7;
+		break;
+
+	/// ECS only register - leave unimplemented for now
+	//case am::Register::BPLCON3:
+	//	break;
+
 	case am::Register::COLOR00:
 	case am::Register::COLOR01:
 	case am::Register::COLOR02:
@@ -934,10 +963,4 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		}
 		break;
 	}
-}
-
-am::ColourRef am::Amiga::GetPaletteColour(int index) const
-{
-	assert(index >= 0 && index < 32);
-	return m_palette[index];
 }

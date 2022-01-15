@@ -76,8 +76,6 @@ namespace am
 		void EnableBreakOnRegister(uint32_t regAddr);
 		void DisableBreakOnRegister();
 
-		ColourRef GetPaletteColour(int index) const;
-
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;
@@ -128,6 +126,22 @@ namespace am
 		bool m_breakpointEnabled = false;
 		bool m_breakOnRegisterEnabled = false;
 		bool m_breakAtNextInstruction = false;
+
+		struct BitPlaneControl
+		{
+			bool hires = false;
+			bool ham = false;
+			bool doublePlayfield = false;
+			bool compositeColourEnabled = false;
+			bool genlockAudioEnabled = false;
+			bool lightPenEnabled = false;
+			bool interlaced = false;
+			bool externalResync = false;
+			uint8_t numPlanesEnabled = 0;
+			uint8_t playfieldPriority = 0;
+			uint8_t playfieldDelay[2] = {};
+			uint8_t playfieldSpritePri[2] = {};
+		} m_bitplane;
 
 		uint32_t m_breakpoint  = 0;
 		uint32_t m_breakAtRegister = 0;

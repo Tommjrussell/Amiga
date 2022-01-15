@@ -19,6 +19,7 @@ namespace guru
 
 	private:
 		void DrawColourPalette();
+		void DrawBitplaneControl();
 
 	private:
 		guru::AmigaApp* m_app;
