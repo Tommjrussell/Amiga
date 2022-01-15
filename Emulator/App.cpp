@@ -2,6 +2,7 @@
 
 #include "amiga/amiga.h"
 #include "debugger.h"
+#include "custom_chips_debugger.h"
 #include "memory_editor.h"
 
 #include "util/file.h"
@@ -27,6 +28,7 @@ guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
 	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom));
 
 	m_debugger = std::make_unique<Debugger>(this, m_amiga.get());
+	m_ccDebugger = std::make_unique<CCDebugger>(this, m_amiga.get());
 }
 
 guru::AmigaApp::~AmigaApp()
@@ -79,6 +81,11 @@ void guru::AmigaApp::Render()
 				m_debuggerOpen = true;
 			}
 
+			if (ImGui::MenuItem("Custom Chips Debugger", ""))
+			{
+				m_ccDebuggerOpen = true;
+			}
+
 			if (ImGui::MenuItem("Memory Viewer/Editor", ""))
 			{
 				if (!m_memoryEditor)
@@ -108,6 +115,11 @@ void guru::AmigaApp::Render()
 	if (m_debuggerOpen)
 	{
 		m_debuggerOpen = m_debugger->Draw();
+	}
+
+	if (m_ccDebuggerOpen)
+	{
+		m_ccDebuggerOpen = m_ccDebugger->Draw();
 	}
 
 	if (m_memoryEditor)

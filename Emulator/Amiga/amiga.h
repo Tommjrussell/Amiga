@@ -76,6 +76,8 @@ namespace am
 		void EnableBreakOnRegister(uint32_t regAddr);
 		void DisableBreakOnRegister();
 
+		ColourRef GetPaletteColour(int index) const;
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;

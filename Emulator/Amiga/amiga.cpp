@@ -935,3 +935,9 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		break;
 	}
 }
+
+am::ColourRef am::Amiga::GetPaletteColour(int index) const
+{
+	assert(index >= 0 && index < 32);
+	return m_palette[index];
+}

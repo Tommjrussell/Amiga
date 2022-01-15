@@ -14,6 +14,7 @@ add_executable (AmigaEmulator
 	"util/file.h" "util/file.cpp"
 	"util/endian.h" "util/strings.h"
 	"debugger.cpp" "debugger.h"
+	"custom_chips_debugger.cpp" "custom_chips_debugger.h"
 	"memory_editor.cpp" "memory_editor.h"
 	"amiga/amiga.cpp" "amiga/amiga.h"
 	"amiga/disassembler.cpp" "amiga/disassembler.h"

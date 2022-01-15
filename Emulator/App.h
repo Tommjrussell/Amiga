@@ -13,6 +13,7 @@ namespace am
 namespace guru
 {
 	class Debugger;
+	class CCDebugger;
 	class MemoryEditor;
 
 	class AmigaApp
@@ -36,6 +37,7 @@ namespace guru
 		bool m_isQuitting = false;
 		bool m_useCrtEmulation = true;
 		bool m_debuggerOpen = false;
+		bool m_ccDebuggerOpen = false;
 		bool m_isRunning = false;
 		bool m_isStarting = false;
 
@@ -44,6 +46,7 @@ namespace guru
 		std::unique_ptr<am::Amiga> m_amiga;
 
 		std::unique_ptr<Debugger> m_debugger;
+		std::unique_ptr<CCDebugger> m_ccDebugger;
 		std::unique_ptr<MemoryEditor> m_memoryEditor;
 	};
 }
