@@ -346,7 +346,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_clr,				//	clr.{s}   {ea}
 	&M68000::Opcode_neg,				//	neg.{s}   {ea}
 	&M68000::Opcode_not,				//	not.{s}   {ea}
-	&M68000::UnimplementOpcode,			//	ext.{wl}   D{reg}
+	&M68000::Opcode_ext,				//	ext.{wl}   D{reg}
 	&M68000::UnimplementOpcode,			//	nbcd    {ea:b}
 	&M68000::Opcode_swap,				//	swap    D{reg}
 	&M68000::Opcode_pea,				//	pea     {ea:l}
@@ -376,7 +376,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_bsr,				//	bsr     {disp}
 	&M68000::Opcode_bcc,				//	b{cc}     {disp}
 	&M68000::Opcode_moveq,				//	moveq   {data}, D{REG}
-	&M68000::UnimplementOpcode,			//	divu    {ea:w}, D{REG}
+	&M68000::Opcode_divu,				//	divu    {ea:w}, D{REG}
 	&M68000::UnimplementOpcode,			//	divs    {ea:w}, D{REG}
 	&M68000::UnimplementOpcode,			//	sbcd    {m}
 	&M68000::Opcode_bitwise,			//	or.{s}    {ea}, D{REG}
@@ -2349,6 +2349,71 @@ bool M68000::Opcode_cmpm(int& delay)
 
 	m_regs.a[ax] += m_opcodeSize;
 	m_regs.a[ay] += m_opcodeSize;
+
+	return true;
+}
+
+bool M68000::Opcode_ext(int& delay)
+{
+	const auto reg = (m_operation & 0b00000000'00000111);
+
+	uint64_t value;
+	if (m_opcodeSize == 2)
+	{
+		value = int16_t(int8_t(m_regs.d[reg]));
+	}
+	else
+	{
+		value = int32_t(int16_t(m_regs.d[reg]));
+	}
+	SetReg(m_regs.d[reg], m_opcodeSize, uint32_t(value));
+
+	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
+
+	SetFlag(Zero, value == 0);
+	SetFlag(Negative, (value & msb) != 0);
+	SetFlag(Overflow | Carry, false);
+
+	return true;
+}
+
+bool M68000::Opcode_divu(int& delay)
+{
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+	uint64_t dividend = m_regs.d[reg];
+
+	uint64_t divisor;
+	if (!GetEaValue(m_ea[0], 2, divisor))
+	{
+		return false;
+	}
+
+	SetFlag(Carry, false);
+
+	if (divisor == 0)
+	{
+		StartInternalException(5);
+		return true;
+	}
+
+	if ((dividend >> 16) >= divisor)
+	{
+		delay += 5;
+		SetFlag(Overflow, true);
+		return true;
+	}
+
+	const auto quotient = dividend / divisor;
+	const auto remainder = dividend % divisor;
+
+	m_regs.d[reg] = uint32_t(quotient | (remainder << 16));
+
+	SetFlag(Overflow, false);
+	SetFlag(Zero, quotient == 0);
+	SetFlag(Negative, false);
+
+	// Timing for best case scenario
+	delay += 38;
 
 	return true;
 }
