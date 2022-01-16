@@ -76,6 +76,8 @@ namespace am
 		void EnableBreakOnRegister(uint32_t regAddr);
 		void DisableBreakOnRegister();
 
+		bool isNTSC() const { return m_isNtsc; }
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;
@@ -121,7 +123,8 @@ namespace am
 		std::vector<uint8_t> m_chipRam;
 		std::vector<uint8_t> m_slowRam;
 
-		bool m_romOverlayEnabled = true;
+		bool m_romOverlayEnabled = false;
+		bool m_isNtsc = false;
 
 		bool m_breakpointEnabled = false;
 		bool m_breakOnRegisterEnabled = false;
@@ -142,6 +145,11 @@ namespace am
 			uint8_t playfieldDelay[2] = {};
 			uint8_t playfieldSpritePri[2] = {};
 		} m_bitplane;
+
+		int m_vPos = 0;
+		int m_hPos = 0;
+		int m_lineLength = 0;
+		int m_frameLength = 0;
 
 		uint32_t m_breakpoint  = 0;
 		uint32_t m_breakAtRegister = 0;

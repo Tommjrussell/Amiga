@@ -29,6 +29,11 @@ bool guru::CCDebugger::Draw()
 		return open;
 	}
 
+	if (ImGui::CollapsingHeader("Beam Info", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		DrawBeamInfo();
+	}
+
 	if (ImGui::CollapsingHeader("Colour Palette"))
 	{
 		DrawColourPalette();
@@ -39,10 +44,32 @@ bool guru::CCDebugger::Draw()
 		DrawBitplaneControl();
 	}
 
-	// TODO
-
 	ImGui::End();
 	return open;
+}
+
+void guru::CCDebugger::DrawBeamInfo()
+{
+	ImGuiInputTextFlags beamValueflags = ImGuiInputTextFlags_ReadOnly;
+	if (m_beamValuesInHex)
+	{
+		beamValueflags |= ImGuiInputTextFlags_CharsHexadecimal;
+	}
+
+	const auto vposr = m_amiga->PeekRegister(am::Register::VPOSR);
+	const auto vhposr = m_amiga->PeekRegister(am::Register::VHPOSR);
+
+	int hpos = vhposr & 0xff;
+	int vpos = (vhposr >> 8) | ((vposr & 1) << 8);
+
+	ImGui::Text("Scan rate mode : %s", m_amiga->isNTSC() ? "NTSC" : "PAL");
+
+	ImGui::PushItemWidth(64);
+	ImGui::InputInt("Beam Pos H", &hpos, 0, 0, beamValueflags);
+	ImGui::InputInt("Beam Pos V", &vpos, 0, 0, beamValueflags);
+	ImGui::PopItemWidth();
+
+	ImGui::Checkbox("In hex", &m_beamValuesInHex);
 }
 
 void guru::CCDebugger::DrawColourPalette()

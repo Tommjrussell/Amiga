@@ -18,11 +18,14 @@ namespace guru
 		bool Draw();
 
 	private:
+		void DrawBeamInfo();
 		void DrawColourPalette();
 		void DrawBitplaneControl();
 
 	private:
 		guru::AmigaApp* m_app;
 		am::Amiga* m_amiga;
+
+		bool m_beamValuesInHex = false;
 	};
 }

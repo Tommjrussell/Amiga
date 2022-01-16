@@ -9,6 +9,16 @@
 
 namespace
 {
+	// NTSC line length is actually 227.5 this is represented as an alternating lines of length of 227/228
+	// PAL line length is a constant 227
+	constexpr int kNTSC_longLineLength = 228;
+	constexpr int kNTSC_shortLineLength = 227;
+	constexpr int kPAL_lineLength = 227;
+
+	constexpr int kNTSC_longFrameLines = 263;
+	constexpr int kNTSC_shortFrameLines = 262;
+	constexpr int kPAL_longFrameLines = 313;
+	constexpr int kPAL_shortFrameLines = 312;
 
 	enum class RegType : uint8_t
 	{
@@ -326,12 +336,9 @@ am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom)
 
 	m_registers.resize(_countof(registerInfo), 0x0000);
 
-	m_palette.fill(ColourRef(0));
-
 	m_m68000 = std::make_unique<cpu::M68000>(this);
 
-	int delay;
-	m_m68000->Reset(delay);
+	Reset();
 }
 
 void am::Amiga::SetPC(uint32_t pc)
@@ -665,7 +672,6 @@ bool am::Amiga::DoOneTick()
 			return false;
 		}
 
-
 		running = m_m68000->DecodeOneInstruction(m_cpuBusyTimer);
 	}
 
@@ -697,6 +703,54 @@ bool am::Amiga::DoOneTick()
 	}
 
 	m_totalCClocks++;
+	m_hPos++;
+
+	auto& vhposr = Reg(Register::VHPOSR);
+
+	if (m_hPos == m_lineLength)
+	{
+		m_hPos = 0;
+
+		if (m_isNtsc)
+		{
+			m_lineLength ^= 0b111; // Flip the last three bits to alternate between line lengths of 227/228
+		}
+		else
+		{
+			m_lineLength = kPAL_lineLength;
+		}
+
+		m_vPos++;
+		if (m_vPos == m_frameLength)
+		{
+			m_vPos = 0;
+			if (m_bitplane.interlaced)
+			{
+				m_frameLength ^= 0b1; // Flip the last bit to alternate between frames of 262/263(NTSC) or 312/313(PAL) lines
+			}
+			else
+			{
+				// TODO : frame length can apparently be forced by modifying the LOF bit in the VPOSW register
+				m_frameLength |= 0b1; // In non-interlaced mode, make sure we are always on a long frame (odd number of lines)
+			}
+		}
+
+		if (!m_bitplane.externalResync)
+		{
+			auto& vposr = Reg(Register::VPOSR);
+
+			vhposr = (m_vPos & 0xff) << 8;
+			vposr = m_vPos >> 8;
+			const bool isLongFrame = (m_frameLength & 1) != 0;
+			vposr |= (isLongFrame ? 0x8000 : 0);
+		}
+	}
+
+	if (!m_bitplane.externalResync)
+	{
+		vhposr &= 0xff00;
+		vhposr |= m_hPos;
+	}
 
 	return running;
 }
@@ -708,7 +762,14 @@ void am::Amiga::Reset()
 	::memset(m_chipRam.data(), 0, m_chipRam.size());
 	::memset(m_slowRam.data(), 0, m_slowRam.size());
 
+	m_palette.fill(ColourRef(0));
+
 	m_bitplane = {};
+
+	m_vPos = 0;
+	m_hPos = 0;
+	m_lineLength = m_isNtsc ? kNTSC_shortLineLength : kPAL_lineLength;
+	m_frameLength = m_isNtsc ? kNTSC_longFrameLines : kPAL_longFrameLines;
 
 	ResetCIA(0);
 	ResetCIA(1);
@@ -901,6 +962,14 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	/// ECS only register - leave unimplemented for now
 	//case am::Register::BPLCON3:
 	//	break;
+
+	case am::Register::BPL1DAT:
+	case am::Register::BPL2DAT:
+	case am::Register::BPL3DAT:
+	case am::Register::BPL4DAT:
+	case am::Register::BPL5DAT:
+	case am::Register::BPL6DAT:
+		break;
 
 	case am::Register::COLOR00:
 	case am::Register::COLOR01:
