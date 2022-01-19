@@ -85,6 +85,28 @@ bool guru::Debugger::Draw()
 
 	// Assembly view
 
+	ImGui::BeginChild("", ImVec2(0, 0), false, 0);
+
+	int flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue;
+	if (m_trackPc)
+	{
+		flags |= ImGuiInputTextFlags_ReadOnly;
+	}
+
+	ImGui::PushItemWidth(64);
+	if (ImGui::InputInt("Disassemble from addr", (int*)&m_disassemblyStart, 0, 0, flags))
+	{
+		m_disassembly.clear();
+	}
+	ImGui::PopItemWidth();
+
+	ImGui::SameLine();
+
+	if (ImGui::Checkbox("Track PC", &m_trackPc))
+	{
+		m_disassembly.clear();
+	}
+
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
 		ImGui::BeginChild("Child_Disassembly", ImVec2(0, 0), true, 0);
@@ -120,6 +142,9 @@ bool guru::Debugger::Draw()
 		ImGui::PopStyleVar();
 	}
 
+	ImGui::EndChild();
+
+
 	ImGui::End();
 	return open;
 }
@@ -129,40 +154,45 @@ void guru::Debugger::UpdateAssembly()
 	auto cpu = m_amiga->GetCpu();
 	auto pc = cpu->GetPC();
 
-	auto[history, ptr] = cpu->GetOperationHistory();
-
-	uint32_t earliestAddr = pc;
-
-	// Look for the earliest recently previously-executed instruction that
-	// is not more than 32 bytes earlier than the current pc
-
-	for (int i = 0; i < history.size(); i++)
+	if (m_trackPc)
 	{
-		if (history[i] < earliestAddr && (history[i] + 32) >= pc)
+		auto[history, ptr] = cpu->GetOperationHistory();
+
+		uint32_t earliestAddr = pc;
+
+		// Look for the earliest recently previously-executed instruction that
+		// is not more than 32 bytes earlier than the current pc
+
+		for (int i = 0; i < history->size(); i++)
 		{
-			earliestAddr = history[i];
+			if ((*history)[i] < earliestAddr && ((*history)[i] + 32) >= pc)
+			{
+				earliestAddr = (*history)[i];
+			}
 		}
+
+		m_disassemblyStart = earliestAddr;
 	}
 
-	m_disassembler->pc = earliestAddr;
+	m_disassembler->pc = m_disassemblyStart;
 
-	bool seenPc = false;
+	bool snapToPc = (m_disassemblyStart > pc);
 
 	for (int lines = 0; lines < 48; lines++)
 	{
-		bool onPc =  (m_disassembler->pc == pc);
-		if (onPc && !seenPc)
+		bool onPc = (m_disassembler->pc == pc);
+		if (onPc && !snapToPc)
 		{
-			seenPc = true;
+			snapToPc = true;
 		}
-		else if (!seenPc && m_disassembler->pc > pc)
+		else if (!snapToPc && m_disassembler->pc > pc)
 		{
 			// Nasty cludge. Force the disassembler to the PC if we've skipped
 			// over it. Usually caused by the presence of padding or data bytes
 			// between an earlier visited instruction and the PC.
 			// (TODO : improve this)
 			m_disassembler->pc = pc;
-			seenPc = onPc = true;
+			snapToPc = onPc = true;
 		}
 
 		const uint32_t addr = m_disassembler->pc;
@@ -249,7 +279,7 @@ void guru::Debugger::DrawControls()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-	ImGui::BeginChild("Controls", ImVec2(0, 100), true, 0);
+	ImGui::BeginChild("Controls", ImVec2(0, 104), true, 0);
 
 	const bool running = m_app->IsRunning();
 	auto regs = m_amiga->GetCpu()->GetRegisters();
@@ -339,6 +369,31 @@ void guru::Debugger::DrawControls()
 		{
 			m_amiga->DisableBreakOnRegister();
 		}
+	}
+
+	if (ImGui::Button("PC History"))
+		ImGui::OpenPopup("pc_history_popup");
+
+	if (ImGui::BeginPopup("pc_history_popup"))
+	{
+		auto cpu = m_amiga->GetCpu();
+		auto[history, ptr] = cpu->GetOperationHistory();
+
+		for (int i = 0; i < history->size(); i++)
+		{
+			if (ptr == 0)
+			{
+				ptr = history->size();
+			}
+			ptr--;
+
+			if ((*history)[ptr] == 0xffffffff)
+				break;
+
+			ImGui::Text("%08x", (*history)[ptr]);
+
+		}
+		ImGui::EndPopup();
 	}
 
 	ImGui::EndChild();

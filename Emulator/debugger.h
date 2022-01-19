@@ -50,6 +50,8 @@ namespace guru
 		am::Amiga* m_amiga;
 		uint32_t m_breakpoint = 0;
 
+		bool m_trackPc = true;
+		uint32_t m_disassemblyStart = 0;
 		bool m_breakOnUnimplementedRegister = false;
 	};
 }

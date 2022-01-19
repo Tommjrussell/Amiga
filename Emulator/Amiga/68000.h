@@ -109,9 +109,9 @@ namespace cpu
 		bool DecodeOneInstruction(int& delay);
 		bool ExecuteOneInstruction(int& delay);
 
-		std::pair<const std::array<uint32_t, 32>&, uint32_t> GetOperationHistory() const
+		std::pair<const std::array<uint32_t, 32>*, uint32_t> GetOperationHistory() const
 		{
-			return std::make_pair(m_operationHistory, m_operationHistoryPtr);
+			return std::make_pair(&m_operationHistory, m_operationHistoryPtr);
 		}
 
 	private:
