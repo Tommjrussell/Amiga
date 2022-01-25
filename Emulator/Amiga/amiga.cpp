@@ -322,6 +322,8 @@ namespace
 }
 
 am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom)
+	: m_lastScreen(new ScreenBuffer)
+	, m_currentScreen(new ScreenBuffer)
 {
 	m_chipRam.resize(size_t(chipRamConfig));
 
@@ -702,6 +704,8 @@ bool am::Amiga::DoOneTick()
 		running = m_m68000->ExecuteOneInstruction(m_cpuBusyTimer);
 	}
 
+	UpdateScreen();
+
 	m_totalCClocks++;
 	m_hPos++;
 
@@ -1031,5 +1035,42 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 			m_breakAtNextInstruction = true;
 		}
 		break;
+	}
+}
+
+void am::Amiga::UpdateScreen()
+{
+	// early return for non-displayable lines
+	if (m_vPos < 36 || m_vPos >= (m_isNtsc ? 253 : 309))
+		return;
+
+	// Messy logic to convert the beam counter to the actual screen position.
+	// The screen position lags behind the beam counter and may therefore be
+	// still on the previous line.
+
+	auto dispYPos = m_vPos - 36;
+	auto dispXPos = m_hPos - 0x41;
+
+	if (dispXPos < 0)
+	{
+		dispXPos += kPAL_lineLength;
+		dispYPos--;
+	}
+	else if (dispXPos == 0 && dispYPos == (m_isNtsc ? 216 : 272))
+	{
+		// Swap the screens immediately once the bottom line is finished.
+		std::swap(m_currentScreen, m_lastScreen);
+		return;
+	}
+
+	if (dispYPos < 0 || dispYPos >= (m_isNtsc ? 216 : 272) || dispXPos >= 0xa8)
+		return;
+
+	// Currently only writes the background colour as if all bitplanes are disabled.
+
+	for (int x = 0; x < 4; x++)
+	{
+		auto index = dispYPos * kScreenBufferWidth + (dispXPos * 4);
+		(*m_currentScreen.get())[index + x] = m_palette[0];
 	}
 }

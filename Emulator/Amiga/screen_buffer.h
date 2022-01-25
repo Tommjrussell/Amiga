@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <stdint.h>
+
 namespace am
 {
 	constexpr auto kScreenBufferWidth = 672;

@@ -3,7 +3,7 @@
 
 #include "GlfwPlatform/shader.h"
 
-#include "amiga\screen_buffer.h"
+#include "amiga/screen_buffer.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -281,12 +281,9 @@ namespace guru
 
 		bool appRunning = true;
 
-		auto screen = std::make_unique<am::ScreenBuffer>();
-		screen->fill(am::ColourRef(0xffffffff));
-
 		while (appRunning && glfwWindowShouldClose(renderer.GetWindow()) == 0)
 		{
-			renderer.SetScreenImage(screen.get());
+			renderer.SetScreenImage(app.GetScreen());
 
 			glfwPollEvents();
 

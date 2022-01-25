@@ -64,6 +64,11 @@ namespace am
 
 		void Reset();
 
+		const ScreenBuffer* GetScreen() const
+		{
+			return m_lastScreen.get();
+		}
+
 		const cpu::M68000* GetCpu() const
 		{
 			return m_m68000.get();
@@ -93,6 +98,8 @@ namespace am
 		}
 
 		bool DoOneTick();
+
+		void UpdateScreen();
 
 		void ResetCIA(int num);
 		void WriteCIA(int num, int port, uint8_t data);
@@ -162,11 +169,14 @@ namespace am
 
 		std::vector<uint16_t> m_registers;
 
+		std::unique_ptr<cpu::M68000> m_m68000;
+
 		CIA m_cia[2];
 
 		std::array<ColourRef, 64> m_palette;
 
-		std::unique_ptr<cpu::M68000> m_m68000;
+		std::unique_ptr<ScreenBuffer> m_currentScreen;
+		std::unique_ptr<ScreenBuffer> m_lastScreen;
 	};
 
 }

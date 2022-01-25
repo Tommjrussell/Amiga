@@ -1,5 +1,7 @@
 #pragma once
 
+#include "amiga/screen_buffer.h"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -24,6 +26,8 @@ namespace guru
 
 		bool IsRunning() const { return m_isRunning; }
 		void SetRunning(bool running);
+
+		const am::ScreenBuffer* GetScreen() const;
 
 		bool Update();
 		void Render();

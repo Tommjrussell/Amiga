@@ -189,3 +189,7 @@ std::vector<uint8_t> guru::AmigaApp::LoadRom(const std::string& romFile) const
 	return rom;
 }
 
+const am::ScreenBuffer* guru::AmigaApp::GetScreen() const
+{
+	return m_amiga->GetScreen();
+}
