@@ -358,7 +358,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_move_usp,			//	move    A{reg}, USP
 	&M68000::UnimplementOpcode,			//	reset
 	&M68000::UnimplementOpcode,			//	nop
-	&M68000::UnimplementOpcode,			//	stop
+	&M68000::Opcode_stop,				//	stop
 	&M68000::Opcode_rte,				//	rte
 	&M68000::Opcode_rts,				//	rts
 	&M68000::UnimplementOpcode,			//	trapv
@@ -390,7 +390,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_cmpm,				//	cmpm.{s}  A{reg}+, A{REG}+
 	&M68000::Opcode_bitwise,			//	eor.{s}   D{REG}, {ea}
 	&M68000::Opcode_mulu,				//	mulu    {ea}, D{REG}
-	&M68000::UnimplementOpcode,			//	muls    {ea}, D{REG}
+	&M68000::Opcode_muls,				//	muls    {ea}, D{REG}
 	&M68000::UnimplementOpcode,			//	abcd    {m}
 	&M68000::Opcode_exg,				//	exg     reg, reg
 	&M68000::Opcode_bitwise,			//	and.{s}   {ea}, D{REG}
@@ -463,7 +463,7 @@ bool M68000::DecodeOneInstruction(int& delay)
 	{
 		// illegal opcode so no further decoding required.
 		m_regs.pc = m_operationAddr;
-		return false;
+		return true;
 	}
 
 	const auto decodeCode = kDecoding[instIndex].code;
@@ -882,7 +882,7 @@ bool M68000::ExecuteOneInstruction(int& delay)
 		m_regs.pc = m_operationAddr;
 		delay = 0;
 	}
-	else
+	else if (m_executeState == ExecuteState::ReadyToExecute)
 	{
 		m_executeState = ExecuteState::ReadyToDecode;
 	}
@@ -2141,6 +2141,52 @@ bool M68000::Opcode_mulu(int& delay)
 	return true;
 }
 
+bool M68000::Opcode_muls(int& delay)
+{
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], 2, eaValue))
+		return false;
+
+	const int32_t regValue = int16_t(GetReg(m_regs.d[reg], 2));
+
+	int32_t result = int16_t(eaValue) * regValue;
+	m_regs.d[reg] = uint32_t(result);
+
+	SetFlag(Zero, result == 0);
+	SetFlag(Negative, (result & 0x8000000) != 0);
+	SetFlag(Overflow | Carry, false);
+
+	delay += 18;
+
+	//  MULS,MULU - The multiply algorithm requires 38+2n clocks where
+	//              n is defined as:
+	//          MULU: n = the number of ones in the <ea>
+	//          MULS: n = concatanate the <ea> with a zero as the LSB;
+	//                    n is the resultant number of 10 or 01 patterns
+	//                    in the 17-bit source; i.e., worst case happens
+	//                    when the source is $5555
+
+	auto bits = eaValue << 1;
+	while (bits)
+	{
+		switch (bits & 0b11)
+		{
+		case 0b01:
+		case 0b10:
+			delay++;
+			break;
+
+		default:
+			break;
+		}
+		bits >>= 1;
+	}
+
+	return true;
+}
+
 bool M68000::Opcode_addi(int& delay)
 {
 	uint64_t eaValue;
@@ -2414,6 +2460,14 @@ bool M68000::Opcode_divu(int& delay)
 
 	// Timing for best case scenario
 	delay += 38;
+
+	return true;
+}
+
+bool M68000::Opcode_stop(int& delay)
+{
+	m_regs.status = uint16_t(m_immediateValue);
+	m_executeState = ExecuteState::Stopped;
 
 	return true;
 }

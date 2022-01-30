@@ -164,6 +164,8 @@ namespace cpu
 		bool Opcode_cmpm(int& delay);
 		bool Opcode_ext(int& delay);
 		bool Opcode_divu(int& delay);
+		bool Opcode_muls(int& delay);
+		bool Opcode_stop(int& delay);
 
 	private:
 
