@@ -77,6 +77,11 @@ bool guru::Debugger::Draw()
 			DrawDMA();
 		}
 
+		if (ImGui::CollapsingHeader("CIAs"))
+		{
+			DrawCIAs();
+		}
+
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 	}
@@ -521,4 +526,84 @@ void guru::Debugger::DrawDMA()
 	}
 	ImGui::Columns(1);
 
+}
+
+void guru::Debugger::DrawCIAs()
+{
+	static const char label[2] = { 'A', 'B' };
+	static const char* timerChildLabel[2][2] = {{ "CIAAtimerA", "CIAAtimerB" }, { "CIABtimerA", "CIABtimerB" }};
+	static const char* todLabel[2] = { "ciaa-tod", "ciab-tod" };
+
+	const am::CIA* cia[2];
+
+	cia[0] = m_amiga->GetCIA(0);
+	cia[1] = m_amiga->GetCIA(1);
+
+	ImGui::Columns(2, NULL, false);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+
+	for (int i = 0; i < 2; i++)
+	{
+		ImGui::Text("CIA-%c", label[i]);
+
+		for (int j = 0; j < 2; j++)
+		{
+			ImGui::BeginChild(timerChildLabel[i][j], ImVec2(0, 64), true, 0);
+			ImGui::Text("Timer %c ", label[j]);
+			if (cia[i]->timer[j].continuous)
+			{
+				ImGui::SameLine();
+				ImGui::Text("(c)");
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("continuous");
+			}
+			if (cia[i]->timer[j].running)
+			{
+				ImGui::SameLine();
+				ImGui::Text("(r)");
+				if (ImGui::IsItemHovered())
+					ImGui::SetTooltip("running");
+			}
+
+			ImGui::Text("Value   : %04x", cia[i]->timer[j].value);
+			ImGui::Text("Latched : %04x", cia[i]->timer[j].latchedValue);
+			ImGui::EndChild();
+
+		}
+
+		ImGui::BeginChild(todLabel[i], ImVec2(0, 84), true, 0);
+		ImGui::Text("TOD ");
+		if (cia[i]->todRunning)
+		{
+			ImGui::SameLine();
+			ImGui::Text("(r)");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Running");
+		}
+		if (cia[i]->todWriteAlarm)
+		{
+			ImGui::SameLine();
+			ImGui::Text("(a)");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Writing Alarm Value");
+		}
+		if (cia[i]->todIsLatched)
+		{
+			ImGui::SameLine();
+			ImGui::Text("(l)");
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Value Latched");
+		}
+
+		ImGui::Text("Value   : %06x", cia[i]->tod);
+		ImGui::Text("Latched : %06x", cia[i]->todLatched);
+		ImGui::Text("Alarm   : %06x", cia[i]->todAlarm);
+		ImGui::EndChild();
+
+		ImGui::NextColumn();
+	}
+	ImGui::PopStyleVar(2);
+	ImGui::Columns(1);
 }

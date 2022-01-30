@@ -47,6 +47,39 @@ namespace am
 		Shared = ChipBus | ChipRegisters,
 	};
 
+	struct CIA
+	{
+		uint8_t pra = 0;
+		uint8_t prb = 0;
+		uint8_t ddra = 0;
+		uint8_t ddrb = 0;
+
+		uint32_t tod = 0;			// time-of-day counter (TOD)
+		uint32_t todLatched = 0;	// latched value of TOD. Counter continues to count while latched.
+		uint32_t todAlarm = 0;
+
+		bool todRunning = true;
+		bool todWriteAlarm = false;
+		bool todIsLatched = false;
+
+		bool timerBCountsUnderflow = false;
+
+		struct Timer
+		{
+			bool running = false;
+			bool continuous = false;
+			uint16_t value = 0;
+			uint16_t latchedValue = 0;
+			uint8_t controlRegister = 0;
+
+			void SetLSB(uint8_t data);
+			void SetMSB(uint8_t data);
+			void ConfigTimerCIA(uint8_t data);
+			bool Tick();
+
+		} timer[2];
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -72,6 +105,11 @@ namespace am
 		const cpu::M68000* GetCpu() const
 		{
 			return m_m68000.get();
+		}
+
+		const CIA* GetCIA(int num)
+		{
+			return &m_cia[num];
 		}
 
 		void SetPC(uint32_t pc);
@@ -101,9 +139,11 @@ namespace am
 
 		void UpdateScreen();
 
-		void ResetCIA(int num);
 		void WriteCIA(int num, int port, uint8_t data);
 		uint8_t ReadCIA(int num, int port);
+		void TickCIAtod(int num);
+
+		void TickCIATimers();
 
 		uint16_t ReadRegister(uint32_t regNum);
 		void WriteRegister(uint32_t regNum, uint16_t value);
@@ -114,16 +154,6 @@ namespace am
 		}
 
 		uint16_t UpdateFlagRegister(am::Register r, uint16_t value);
-
-	private:
-
-		struct CIA
-		{
-			uint8_t pra;
-			uint8_t prb;
-			uint8_t ddra;
-			uint8_t ddrb;
-		};
 
 	private:
 		std::vector<uint8_t> m_rom;
@@ -163,6 +193,8 @@ namespace am
 
 		uint32_t m_sharedBusRws = 0;
 		uint32_t m_exclusiveBusRws = 0;
+
+		int m_timerCountdown = 0;
 
 		uint64_t m_totalCClocks = 0;
 		int m_cpuBusyTimer = 0;

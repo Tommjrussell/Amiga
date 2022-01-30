@@ -30,6 +30,7 @@ namespace guru
 		void DrawControls();
 		void DrawSystemInterrupts();
 		void DrawDMA();
+		void DrawCIAs();
 
 		void UpdateAssembly();
 

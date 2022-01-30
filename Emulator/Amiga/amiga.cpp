@@ -706,6 +706,14 @@ bool am::Amiga::DoOneTick()
 
 	UpdateScreen();
 
+	m_timerCountdown--;
+	if (m_timerCountdown == 0)
+	{
+		// timers update at 1/10 CPU frequency
+		TickCIATimers();
+		m_timerCountdown = 5;
+	}
+
 	m_totalCClocks++;
 	m_hPos++;
 
@@ -727,6 +735,11 @@ bool am::Amiga::DoOneTick()
 		m_vPos++;
 		if (m_vPos == m_frameLength)
 		{
+			if (!m_bitplane.externalResync)
+			{
+				TickCIAtod(0);
+			}
+
 			m_vPos = 0;
 			if (m_bitplane.interlaced)
 			{
@@ -741,6 +754,8 @@ bool am::Amiga::DoOneTick()
 
 		if (!m_bitplane.externalResync)
 		{
+			TickCIAtod(1);
+
 			auto& vposr = Reg(Register::VPOSR);
 
 			vhposr = (m_vPos & 0xff) << 8;
@@ -775,8 +790,10 @@ void am::Amiga::Reset()
 	m_lineLength = m_isNtsc ? kNTSC_shortLineLength : kPAL_lineLength;
 	m_frameLength = m_isNtsc ? kNTSC_longFrameLines : kPAL_longFrameLines;
 
-	ResetCIA(0);
-	ResetCIA(1);
+	m_cia[0] = {};
+	m_cia[1] = {};
+
+	m_timerCountdown = 3; // random init value
 
 	// Enable ROM overlay
 	m_cia[0].pra |= 0x01;
@@ -787,15 +804,6 @@ void am::Amiga::Reset()
 	m_totalCClocks = 0;
 
 	m_m68000->Reset(m_cpuBusyTimer);
-}
-
-void am::Amiga::ResetCIA(int num)
-{
-	auto& cia = m_cia[num];
-	cia.pra = 0;
-	cia.prb = 0;
-	cia.ddra = 0;
-	cia.ddrb = 0;
 }
 
 void am::Amiga::WriteCIA(int num, int port, uint8_t data)
@@ -831,11 +839,142 @@ void am::Amiga::WriteCIA(int num, int port, uint8_t data)
 		cia.ddrb = data;
 		break;
 
+	case 0x4: // timer A LSB
+	{
+		cia.timer[0].SetLSB(data);
+	}	break;
+
+	case 0x5: // timer A MSB
+	{
+		cia.timer[0].SetMSB(data);
+	}	break;
+
+	case 0x6: // timer B LSB
+	{
+		cia.timer[1].SetLSB(data);
+	}	break;
+
+	case 0x7: // timer B MSB
+	{
+		cia.timer[1].SetMSB(data);
+	}	break;
+
+	case 0x8: // tod LSB
+	{
+		if (cia.todWriteAlarm)
+		{
+			cia.todAlarm &= 0x00ffff00;
+			cia.todAlarm |= uint32_t(data);
+		}
+		else
+		{
+			cia.tod &= 0x00ffff00;
+			cia.tod |= uint32_t(data);
+			cia.todRunning = true;
+		}
+	}	break;
+
+	case 0x9: // tod middle byte
+	{
+		if (cia.todWriteAlarm)
+		{
+			cia.todAlarm &= 0x00ff00ff;
+			cia.todAlarm |= (uint32_t(data) << 8);
+		}
+		else
+		{
+			cia.todRunning = false;
+			cia.tod &= 0x00ff00ff;
+			cia.tod |= (uint32_t(data) << 8);
+		}
+	}	break;
+
+	case 0xa: // tod MSB
+	{
+		if (cia.todWriteAlarm)
+		{
+			cia.todAlarm &= 0x0000ffff;
+			cia.todAlarm |= (uint32_t(data) << 16);
+		}
+		else
+		{
+			cia.todRunning = false;
+			cia.tod &= 0x0000ffff;
+			cia.tod |= (uint32_t(data) << 16);
+		}
+	}	break;
+
+	case 0xe: // Control Register A
+	{
+		cia.timer[0].ConfigTimerCIA(data);
+	}	break;
+
+	case 0xf: // Control Register B
+	{
+		cia.timer[1].ConfigTimerCIA(data);
+		cia.todWriteAlarm = (cia.timer[1].controlRegister & 0x80) != 0;
+		cia.timerBCountsUnderflow = (cia.timer[1].controlRegister & 0x40) != 0;
+	}	break;
+
 	default:
 		// TODO : other registers
 		break;
 
 	}
+}
+void am::CIA::Timer::ConfigTimerCIA(uint8_t data)
+{
+	controlRegister = data;
+
+	running = (controlRegister & 0x01) != 0;
+	continuous = (controlRegister & 0x08) == 0;
+
+	if ((controlRegister & 0x10) != 0) // force load strobe bit
+	{
+		controlRegister &= ~0x10;
+		value = latchedValue;
+	}
+}
+
+void am::CIA::Timer::SetLSB(uint8_t data)
+{
+	latchedValue &= 0xff00;
+	latchedValue |= uint16_t(data);
+}
+
+void am::CIA::Timer::SetMSB(uint8_t data)
+{
+	latchedValue &= 0x00ff;
+	latchedValue |= uint16_t(data) << 8;
+	if (!running && !continuous)
+	{
+		value = latchedValue;
+		controlRegister |= 0x01;
+		running = true;
+	}
+}
+
+bool am::CIA::Timer::Tick()
+{
+	if (running)
+	{
+		if (value == 0)
+		{
+			value = latchedValue;
+			if (!continuous)
+			{
+				running = false;
+				controlRegister &= ~0x01;
+			}
+
+			return true;
+		}
+		else
+		{
+			value--;
+		}
+	}
+	return false;
 }
 
 uint8_t am::Amiga::ReadCIA(int num, int port)
@@ -853,10 +992,98 @@ uint8_t am::Amiga::ReadCIA(int num, int port)
 	case 0x3:
 		return cia.ddrb;
 
+	case 0x4: // timer A LSB
+		return uint8_t(cia.timer[0].value & 0xff);
+
+	case 0x5: // timer A MSB
+		return uint8_t((cia.timer[0].value >> 8) & 0xff);
+
+	case 0x6: // timer B LSB
+		return uint8_t(cia.timer[1].value & 0xff);
+
+	case 0x7: // timer B MSB
+		return uint8_t((cia.timer[1].value >> 8) & 0xff);
+
+	case 0x8: // tod LSB
+	{
+		uint8_t value;
+		if (cia.todIsLatched)
+		{
+			value = uint8_t(cia.todLatched & 0xff);
+			cia.todIsLatched = false;
+		}
+		else
+		{
+			value = uint8_t(cia.tod & 0xff);
+		}
+		return value;
+	}
+
+	case 0x9: // tod middle byte
+	{
+		if (cia.todIsLatched)
+		{
+			return uint8_t((cia.todLatched & 0x0000ff00) >> 8);
+		}
+		else
+		{
+			return uint8_t((cia.tod & 0x0000ff00) >> 8);
+		}
+	}
+
+	case 0xa: // tod MSB
+	{
+		if (!cia.todIsLatched)
+		{
+			cia.todIsLatched = true;
+			cia.todLatched = cia.tod;
+		}
+		return uint8_t((cia.todLatched & 0x00ff0000) >> 16);
+	}
+
+	case 0xe:
+		return cia.timer[0].controlRegister;
+
+	case 0xf:
+		return cia.timer[1].controlRegister;
+
 	default:
 		// TODO : other registers
 		return 0;
 	}
+}
+
+void am::Amiga::TickCIAtod(int num)
+{
+	auto& cia = m_cia[num];
+
+	if (!cia.todRunning)
+		return;
+
+	cia.tod++;
+	cia.tod &= 0x00ffffff; // only 24 bits available
+
+	// TODO : tod alarm
+}
+
+void am::Amiga::TickCIATimers()
+{
+	for (int i = 0; i < 2; i++)
+	{
+		bool tickTimerB = !m_cia[i].timerBCountsUnderflow;
+
+		if (m_cia[i].timer[0].Tick())
+		{
+			tickTimerB = true;
+		}
+
+		if (tickTimerB)
+		{
+			m_cia[i].timer[1].Tick();
+		}
+	}
+
+	// TODO : interrupts!
 }
 
 uint16_t am::Amiga::PeekRegister(am::Register r) const
