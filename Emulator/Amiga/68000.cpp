@@ -423,6 +423,8 @@ M68000::M68000(IBus* bus)
 
 void M68000::Reset(int& delay)
 {
+	m_interruptControl = 0;
+
 	m_operationHistory.fill(-1);
 	m_operationHistoryPtr = 0;
 
@@ -434,8 +436,33 @@ void M68000::Reset(int& delay)
 	delay = 62;
 }
 
+bool M68000::InterruptActive() const
+{
+	return (m_interruptControl > ((m_regs.status >> 8) & 0x7)) || m_interruptControl == 7;
+}
+
+void M68000::SetInterruptControl(int intLevel)
+{
+	m_interruptControl = intLevel;
+	if (m_executeState == ExecuteState::Stopped && InterruptActive())
+	{
+		m_executeState = ExecuteState::ReadyToDecode;
+	}
+}
+
 bool M68000::DecodeOneInstruction(int& delay)
 {
+	if (InterruptActive())
+	{
+		StartInternalException(24 + m_interruptControl);
+
+		delay += 12;
+
+		m_regs.status &= 0b11111000'11111111;
+		m_regs.status |= (m_interruptControl & 0x7) << 8;
+		return true;
+	}
+
 	// returns false on illegal instruction
 
 	m_executeState = ExecuteState::ReadyToExecute;
@@ -2467,7 +2494,9 @@ bool M68000::Opcode_divu(int& delay)
 bool M68000::Opcode_stop(int& delay)
 {
 	m_regs.status = uint16_t(m_immediateValue);
-	m_executeState = ExecuteState::Stopped;
-
+	if (!InterruptActive())
+	{
+		m_executeState = ExecuteState::Stopped;
+	}
 	return true;
 }

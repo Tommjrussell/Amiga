@@ -148,6 +148,8 @@ namespace am
 		uint16_t ReadRegister(uint32_t regNum);
 		void WriteRegister(uint32_t regNum, uint16_t value);
 
+		void DoInterruptRequest();
+
 		uint16_t& Reg(am::Register r)
 		{
 			return m_registers[uint32_t(r) / 2];

@@ -738,6 +738,9 @@ bool am::Amiga::DoOneTick()
 			if (!m_bitplane.externalResync)
 			{
 				TickCIAtod(0);
+
+				// Send the V-Blank interrupt
+				WriteRegister(uint32_t(am::Register::INTREQ), 0x8020);
 			}
 
 			m_vPos = 0;
@@ -1161,10 +1164,12 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 
 	case am::Register::INTENA:
 		UpdateFlagRegister(am::Register::INTENAR, value);
+		DoInterruptRequest();
 		break;
 
 	case am::Register::INTREQ:
 		UpdateFlagRegister(am::Register::INTREQR, value);
+		DoInterruptRequest();
 		break;
 
 	case am::Register::BPLCON0:
@@ -1263,6 +1268,41 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		}
 		break;
 	}
+}
+
+void am::Amiga::DoInterruptRequest()
+{
+	// The interrupt request or mask registers have potentially been altered.
+	// So see if we need to inform the CPU of an interrupt request (and at which level).
+
+	auto& intreqr = Reg(Register::INTREQR);
+	auto& intenar = Reg(Register::INTENAR);
+
+	if ((intenar & 0x4000) == 0)
+	{
+		// master interrupt enabled bit not set so no interrupts.
+		m_m68000->SetInterruptControl(0);
+		return;
+	}
+
+	const uint16_t interrupts = intreqr & intenar;
+
+	// Bits in 'interrupts' are the currently outstanding enabled interrupts.
+	// Find the highest level one and set to that.
+	int msb = 0;
+	auto temp = interrupts;
+	while(temp)
+	{
+		temp >>= 1;
+		msb++;
+	}
+
+	static const uint8_t systemToProcessorIntLevel[15] =
+	{
+		0, 1, 1, 1, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 6
+	};
+
+	m_m68000->SetInterruptControl(systemToProcessorIntLevel[msb]);
 }
 
 void am::Amiga::UpdateScreen()

@@ -114,6 +114,8 @@ namespace cpu
 			return std::make_pair(&m_operationHistory, m_operationHistoryPtr);
 		}
 
+		void SetInterruptControl(int intLevel);
+
 	private:
 
 		bool UnimplementOpcode(int& delay);
@@ -169,6 +171,8 @@ namespace cpu
 
 	private:
 
+		bool InterruptActive() const;
+
 		bool EvaluateCondition() const;
 
 		bool StartInternalException(uint8_t vectorNum);
@@ -216,6 +220,7 @@ namespace cpu
 		uint32_t m_operationAddr;
 		uint32_t m_currentInstructionIndex = 0;
 		uint32_t m_immediateValue = 0;
+		int m_interruptControl = 0;
 		uint16_t m_operation;
 		uint8_t m_opcodeSize = 0;
 
