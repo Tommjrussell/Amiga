@@ -1172,6 +1172,11 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		DoInterruptRequest();
 		break;
 
+	case am::Register::SERPER:
+		// Serial port curretly not emulated but silently accept
+		// control values to this register.
+		break;
+
 	case am::Register::BPLCON0:
 		m_bitplane.hires = ((value & 0x8000) != 0);
 		m_bitplane.numPlanesEnabled = (value & 0x7000) >> 12;
