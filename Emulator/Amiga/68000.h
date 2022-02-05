@@ -168,6 +168,7 @@ namespace cpu
 		bool Opcode_divu(int& delay);
 		bool Opcode_muls(int& delay);
 		bool Opcode_stop(int& delay);
+		bool Opcode_nop(int& delay);
 
 	private:
 

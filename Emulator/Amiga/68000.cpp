@@ -357,7 +357,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_unlk,				//	unlk    A{reg}
 	&M68000::Opcode_move_usp,			//	move    A{reg}, USP
 	&M68000::UnimplementOpcode,			//	reset
-	&M68000::UnimplementOpcode,			//	nop
+	&M68000::Opcode_nop,				//	nop
 	&M68000::Opcode_stop,				//	stop
 	&M68000::Opcode_rte,				//	rte
 	&M68000::Opcode_rts,				//	rts
@@ -2498,5 +2498,10 @@ bool M68000::Opcode_stop(int& delay)
 	{
 		m_executeState = ExecuteState::Stopped;
 	}
+	return true;
+}
+
+bool M68000::Opcode_nop(int& delay)
+{
 	return true;
 }
