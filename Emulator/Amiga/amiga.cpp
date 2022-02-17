@@ -357,6 +357,7 @@ void am::Amiga::SetBreakpoint(uint32_t addr)
 void am::Amiga::ClearBreakpoint()
 {
 	m_breakpointEnabled = false;
+	m_breakAtLine = false;
 }
 
 void am::Amiga::EnableBreakOnRegister(uint32_t regAddr)
@@ -365,9 +366,20 @@ void am::Amiga::EnableBreakOnRegister(uint32_t regAddr)
 	m_breakOnRegisterEnabled = true;
 }
 
+void am::Amiga::EnableBreakOnCopper()
+{
+	m_breakAtNextCopperInstruction = true;
+}
+
 void am::Amiga::DisableBreakOnRegister()
 {
 	m_breakOnRegisterEnabled = false;
+}
+
+void am::Amiga::EnableBreakOnLine(uint32_t lineNum)
+{
+	m_breakAtLine = true;
+	m_breakAtLineNum = lineNum;
 }
 
 uint8_t am::Amiga::PeekByte(uint32_t addr) const
@@ -609,17 +621,25 @@ void am::Amiga::WriteBusByte(uint32_t addr, uint8_t value)
 	}
 }
 
+uint16_t am::Amiga::ReadChipWord(uint32_t addr) const
+{
+	const uint32_t chipRamMask = uint32_t(m_chipRam.size()) - 1;
+	uint16_t value;
+	memcpy(&value, &m_chipRam[addr & chipRamMask], 2);
+	return SwapEndian(value);
+}
+
 bool am::Amiga::ExecuteFor(uint64_t cclocks)
 {
 	const auto runTill = m_totalCClocks + cclocks;
 
-	bool running = true;
+	m_running = true;
 
-	while (running && m_totalCClocks < runTill)
+	while (m_running && m_totalCClocks < runTill)
 	{
-		running = DoOneTick();
+		DoOneTick();
 	}
-	return running;
+	return m_running;
 }
 
 bool am::Amiga::ExecuteOneCpuInstruction()
@@ -629,13 +649,13 @@ bool am::Amiga::ExecuteOneCpuInstruction()
 		DoOneTick();
 	}
 
-	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode)
+	m_breakAtNextInstruction = false;
+	while (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode)
 	{
-		m_breakAtNextInstruction = false;
 		DoOneTick();
 	}
 
-	while (!(CpuReady() && m_m68000->GetExecutionState() != cpu::ExecuteState::ReadyToExecute))
+	while (!CpuReady() || m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToExecute)
 	{
 		DoOneTick();
 	}
@@ -661,20 +681,29 @@ bool am::Amiga::ExecuteToEndOfCpuInstruction()
 	return true;
 }
 
-bool am::Amiga::DoOneTick()
+void am::Amiga::DoOneTick()
 {
-	bool running = true;
+	const bool evenClock = (m_hPos & 1) == 0;
 	bool chipBusBusy = false;
+
+	if (evenClock)
+	{
+		chipBusBusy = DoCopper();
+	}
 
 	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode && CpuReady())
 	{
 		if (m_breakAtNextInstruction || (m_breakpointEnabled && m_m68000->GetPC() == m_breakpoint))
 		{
 			m_breakAtNextInstruction = false;
-			return false;
+			m_running = false;
+			return;
 		}
 
-		running = m_m68000->DecodeOneInstruction(m_cpuBusyTimer);
+		if (!m_m68000->DecodeOneInstruction(m_cpuBusyTimer))
+		{
+			m_running = false;
+		}
 	}
 
 	if (m_cpuBusyTimer == 0)
@@ -701,7 +730,10 @@ bool am::Amiga::DoOneTick()
 
 	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToExecute && CpuReady())
 	{
-		running = m_m68000->ExecuteOneInstruction(m_cpuBusyTimer);
+		if (!m_m68000->ExecuteOneInstruction(m_cpuBusyTimer))
+		{
+			m_running = false;
+		}
 	}
 
 	UpdateScreen();
@@ -741,6 +773,9 @@ bool am::Amiga::DoOneTick()
 
 				// Send the V-Blank interrupt
 				WriteRegister(uint32_t(am::Register::INTREQ), 0x8020);
+
+				// Reset the copper
+				WriteRegister(uint32_t(am::Register::COPJMP1), 0);
 			}
 
 			m_vPos = 0;
@@ -766,6 +801,12 @@ bool am::Amiga::DoOneTick()
 			const bool isLongFrame = (m_frameLength & 1) != 0;
 			vposr |= (isLongFrame ? 0x8000 : 0);
 		}
+
+		if (m_breakAtLine && m_vPos == m_breakAtLineNum)
+		{
+			m_breakAtLine = false;
+			m_running = false;
+		}
 	}
 
 	if (!m_bitplane.externalResync)
@@ -773,8 +814,6 @@ bool am::Amiga::DoOneTick()
 		vhposr &= 0xff00;
 		vhposr |= m_hPos;
 	}
-
-	return running;
 }
 
 void am::Amiga::Reset()
@@ -792,6 +831,8 @@ void am::Amiga::Reset()
 	m_hPos = 0;
 	m_lineLength = m_isNtsc ? kNTSC_shortLineLength : kPAL_lineLength;
 	m_frameLength = m_isNtsc ? kNTSC_longFrameLines : kPAL_longFrameLines;
+
+	m_copper = {};
 
 	m_cia[0] = {};
 	m_cia[1] = {};
@@ -1177,6 +1218,50 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		// control values to this register.
 		break;
 
+	case am::Register::COP1LCH:
+	case am::Register::COP1LCL:
+	case am::Register::COP2LCH:
+	case am::Register::COP2LCL:
+		break;
+
+	case am::Register::COPJMP1:
+	{
+		m_copper.pc = uint32_t(Reg(Register::COP1LCH) & 0b00000000'00011111) << 16
+			| Reg(Register::COP1LCL);
+		if (m_copper.state == CopperState::Stopped || m_copper.state == CopperState::Waiting)
+		{
+			m_copper.state = CopperState::Read;
+			if (m_breakAtNextCopperInstruction)
+			{
+				m_breakAtNextCopperInstruction = false;
+				m_running = false;
+			}
+		}
+		else if (m_copper.state == CopperState::WaitSkip)
+		{
+			m_copper.state = CopperState::Abort;
+		}
+	}	break;
+
+	case am::Register::COPJMP2:
+	{
+		m_copper.pc = uint32_t(Reg(Register::COP2LCH) & 0b00000000'00011111) << 16
+			| Reg(Register::COP2LCL);
+		if (m_copper.state == CopperState::Stopped || m_copper.state == CopperState::Waiting)
+		{
+			m_copper.state = CopperState::Read;
+			if (m_breakAtNextCopperInstruction)
+			{
+				m_breakAtNextCopperInstruction = false;
+				m_running = false;
+			}
+		}
+		else if (m_copper.state == CopperState::WaitSkip)
+		{
+			m_copper.state = CopperState::Abort;
+		}
+	}	break;
+
 	case am::Register::BPLCON0:
 		m_bitplane.hires = ((value & 0x8000) != 0);
 		m_bitplane.numPlanesEnabled = (value & 0x7000) >> 12;
@@ -1308,6 +1393,159 @@ void am::Amiga::DoInterruptRequest()
 	};
 
 	m_m68000->SetInterruptControl(systemToProcessorIntLevel[msb]);
+}
+
+bool am::Amiga::CopperDmaEnabled() const
+{
+	const auto dmaconr = Reg(Register::DMACONR);
+	const uint16_t enabled = uint16_t(Dma::COPEN) | uint16_t(Dma::DMAEN);
+
+	return (dmaconr & enabled) == enabled;
+}
+
+bool am::Amiga::DoCopper()
+{
+	switch (m_copper.state)
+	{
+	case CopperState::Stopped:
+		break;
+
+	case CopperState::Waiting:
+	{
+		const auto verticalComparePosition = uint16_t(m_vPos) & m_copper.verticalMask;
+		const auto horizontalComparePosition = uint16_t(m_hPos) & m_copper.horizontalMask;
+
+		if (verticalComparePosition > (m_copper.verticalWaitPos & m_copper.verticalMask) ||
+			(verticalComparePosition == (m_copper.verticalWaitPos & m_copper.verticalMask) && horizontalComparePosition >= (m_copper.horizontalWaitPos & m_copper.horizontalMask)))
+		{
+			// TODO : check blitter finished also if required.
+			m_copper.state = CopperState::WakeUp;
+		}
+
+	}	break;
+
+	case CopperState::Read:
+	{
+		if (CopperDmaEnabled())
+		{
+			m_copper.readAddr = m_copper.pc;
+			m_copper.pc += 4;
+			m_copper.ir1 = ReadChipWord(m_copper.readAddr);
+			m_copper.readAddr += 2;
+
+			if ((m_copper.ir1 & 1) == 0) // Move
+			{
+				m_copper.state = CopperState::Move;
+			}
+			else
+			{
+				m_copper.state = CopperState::WaitSkip;
+			}
+			return true;
+		}
+	}	break;
+
+	case CopperState::Move:
+	{
+		m_copper.ir2 = ReadChipWord(m_copper.readAddr);
+
+		bool skipping = m_copper.skipping;
+		m_copper.skipping = false;
+
+		const auto copcon = Reg(Register::COPCON);
+		const bool danger = (copcon & 0x02) != 0; // bit 01 is 'danger' bit
+
+		const auto reg = m_copper.ir1 & 0x01ff;
+
+		if (reg < 0x40 || (!danger && reg < 0x80))
+		{
+			// Based on information gleaned from forums,
+			// attempting to move to a 'banned' register
+			// stops the copper (even if skipping).
+			m_copper.state = CopperState::Stopped;
+		}
+		else
+		{
+			if (!skipping)
+			{
+				WriteRegister(reg, m_copper.ir2);
+			}
+			m_copper.state = CopperState::Read;
+		}
+
+		if (m_breakAtNextCopperInstruction)
+		{
+			m_breakAtNextCopperInstruction = false;
+			m_running = false;
+
+		}
+	}	break;
+
+
+	case CopperState::WaitSkip:
+	{
+		m_copper.ir2 = ReadChipWord(m_copper.readAddr);
+		m_copper.skipping = false;
+
+		const auto verticalWaitPos = uint16_t(m_copper.ir1 >> 8);
+		const auto horizontalWaitPos = uint16_t(m_copper.ir1 & 0x00fe);
+
+		const auto verticalMask = uint16_t(((m_copper.ir2 >> 8) & 0x7f) | 0x80);
+		const auto horizontalMask = uint16_t(m_copper.ir2 & 0x00fe);
+
+		if ((m_copper.ir2 & 1) == 0) // Wait
+		{
+			m_copper.waitForBlitter = (m_copper.ir2 & 0x8000) == 0;
+			m_copper.verticalMask = verticalMask;
+			m_copper.verticalWaitPos = verticalWaitPos;
+			m_copper.horizontalMask = horizontalMask;
+			m_copper.horizontalWaitPos = horizontalWaitPos;
+			m_copper.state = CopperState::Waiting;
+		}
+		else // Skip
+		{
+			const auto verticalComparePos = uint16_t(m_vPos) & verticalMask;
+			const auto horizontalComparePos = uint16_t(m_hPos) & horizontalMask;
+
+			if (verticalComparePos < (verticalWaitPos & verticalMask) ||
+				(verticalComparePos == (verticalWaitPos & verticalMask) && horizontalComparePos < (horizontalWaitPos & horizontalMask)))
+			{
+				m_copper.skipping = true;
+			}
+			m_copper.state = CopperState::Read;
+
+			if (m_breakAtNextCopperInstruction)
+			{
+				m_breakAtNextCopperInstruction = false;
+				m_running = false;
+			}
+		}
+	}	break;
+
+	case CopperState::Abort:
+	{
+		// Happens when we're half way through executing a wait/skip instruction and an external source (CPU) strobes the
+		// COPJMP* register. We must complete the fetching but not perform the wait/skip.
+
+		m_copper.ir2 = ReadChipWord(m_copper.readAddr);
+		m_copper.skipping = false;
+		m_copper.state = CopperState::Read;
+	}	break;
+
+	case CopperState::WakeUp:
+	{
+		m_copper.state = CopperState::Read;
+
+		if (m_breakAtNextCopperInstruction)
+		{
+			m_breakAtNextCopperInstruction = false;
+			m_running = false;
+		}
+	}	break;
+
+	}
+
+	return false;
 }
 
 void am::Amiga::UpdateScreen()

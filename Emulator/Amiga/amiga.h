@@ -80,6 +80,32 @@ namespace am
 		} timer[2];
 	};
 
+	enum class CopperState : uint8_t
+	{
+		Stopped,
+		Waiting,
+		Read,
+		Move,
+		WaitSkip,
+		Abort,
+		WakeUp,
+	};
+
+	struct Copper
+	{
+		uint32_t pc = 0;
+		uint32_t readAddr = 0;
+		uint16_t ir1 = 0;
+		uint16_t ir2 = 0;
+		uint16_t verticalWaitPos = 0;
+		uint16_t horizontalWaitPos = 0;
+		uint16_t verticalMask = 0;
+		uint16_t horizontalMask = 0;
+		CopperState state = CopperState::Stopped;
+		bool skipping = false;
+		bool waitForBlitter = false;
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -112,14 +138,34 @@ namespace am
 			return &m_cia[num];
 		}
 
+		const Copper& GetCopper() const
+		{
+			return m_copper;
+		}
+
 		void SetPC(uint32_t pc);
 
 		void SetBreakpoint(uint32_t addr);
+		void EnableBreakOnCopper();
 		void ClearBreakpoint();
 		void EnableBreakOnRegister(uint32_t regAddr);
 		void DisableBreakOnRegister();
+		void EnableBreakOnLine(uint32_t lineNum);
 
-		bool isNTSC() const { return m_isNtsc; }
+		bool isNTSC() const
+		{
+			return m_isNtsc;
+		}
+
+		int GetVPos() const
+		{
+			return m_vPos;
+		}
+
+		int GetFrameLength() const
+		{
+			return m_frameLength;
+		}
 
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
@@ -128,6 +174,9 @@ namespace am
 		virtual void WriteBusByte(uint32_t addr, uint8_t value) override final;
 
 	private:
+
+		uint16_t ReadChipWord(uint32_t addr) const;
+
 		std::tuple<Mapped, uint8_t*> GetMappedMemory(uint32_t addr);
 
 		bool CpuReady() const
@@ -135,9 +184,11 @@ namespace am
 			return m_cpuBusyTimer == 0 && m_exclusiveBusRws == 0 && m_sharedBusRws == 0;
 		}
 
-		bool DoOneTick();
+		void DoOneTick();
 
 		void UpdateScreen();
+
+		bool DoCopper();
 
 		void WriteCIA(int num, int port, uint8_t data);
 		uint8_t ReadCIA(int num, int port);
@@ -155,7 +206,14 @@ namespace am
 			return m_registers[uint32_t(r) / 2];
 		}
 
+		uint16_t Reg(am::Register r) const
+		{
+			return m_registers[uint32_t(r) / 2];
+		}
+
 		uint16_t UpdateFlagRegister(am::Register r, uint16_t value);
+
+		bool CopperDmaEnabled() const;
 
 	private:
 		std::vector<uint8_t> m_rom;
@@ -168,6 +226,9 @@ namespace am
 		bool m_breakpointEnabled = false;
 		bool m_breakOnRegisterEnabled = false;
 		bool m_breakAtNextInstruction = false;
+		bool m_breakAtNextCopperInstruction = false;
+		bool m_breakAtLine = false;
+		bool m_running = true;
 
 		struct BitPlaneControl
 		{
@@ -192,6 +253,7 @@ namespace am
 
 		uint32_t m_breakpoint  = 0;
 		uint32_t m_breakAtRegister = 0;
+		uint32_t m_breakAtLineNum = 0;
 
 		uint32_t m_sharedBusRws = 0;
 		uint32_t m_exclusiveBusRws = 0;
@@ -200,6 +262,8 @@ namespace am
 
 		uint64_t m_totalCClocks = 0;
 		int m_cpuBusyTimer = 0;
+
+		Copper m_copper = {};
 
 		std::vector<uint16_t> m_registers;
 

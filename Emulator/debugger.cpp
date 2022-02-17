@@ -8,6 +8,7 @@
 #include "amiga/registers.h"
 
 #include "util/strings.h"
+#include "util/imgui_extras.h"
 
 #include <imgui.h>
 
@@ -46,6 +47,11 @@ guru::Debugger::Debugger(guru::AmigaApp* app, am::Amiga* amiga)
 
 guru::Debugger::~Debugger()
 {
+}
+
+void guru::Debugger::OnStartRunning()
+{
+	m_disassembly.clear();
 }
 
 bool guru::Debugger::Draw()
@@ -282,6 +288,8 @@ void guru::Debugger::DrawCpuRegisters()
 
 void guru::Debugger::DrawControls()
 {
+	using util::ActiveButton;
+
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
 	ImGui::BeginChild("Controls", ImVec2(0, 104), true, 0);
@@ -289,32 +297,10 @@ void guru::Debugger::DrawControls()
 	const bool running = m_app->IsRunning();
 	auto regs = m_amiga->GetCpu()->GetRegisters();
 
-	auto ActiveButton = [](const char* name, bool active, const ImVec2& size = ImVec2(0, 0)) -> bool
-	{
-		if (!active)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(128, 128, 128, 255));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(128, 128, 128, 255));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(128, 128, 128, 255));
-			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.6f);
-		}
-
-		auto ret = ImGui::Button(name, size);
-
-		if (!active)
-		{
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor(3);
-		}
-
-		return active && ret;
-	};
-
 	if (ActiveButton("Start", !running))
 	{
 		m_amiga->ClearBreakpoint();
 		m_app->SetRunning(true);
-		m_disassembly.clear();
 	}
 
 	ImGui::SameLine();
@@ -332,7 +318,6 @@ void guru::Debugger::DrawControls()
 		m_disassembly.clear();
 	}
 
-
 	ImGui::SameLine();
 	if (ActiveButton("Step Over", !running))
 	{
@@ -341,7 +326,6 @@ void guru::Debugger::DrawControls()
 		m_disassembler->Disassemble(); // ignore disassembled string
 		m_amiga->SetBreakpoint(m_disassembler->pc);
 		m_app->SetRunning(true);
-		m_disassembly.clear();
 	}
 
 	ImGui::SameLine();
@@ -356,7 +340,6 @@ void guru::Debugger::DrawControls()
 	{
 		m_amiga->SetBreakpoint(m_breakpoint);
 		m_app->SetRunning(true);
-		m_disassembly.clear();
 	}
 
 	ImGui::SameLine();

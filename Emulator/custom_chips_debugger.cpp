@@ -5,6 +5,8 @@
 #include "amiga/amiga.h"
 #include "amiga/registers.h"
 
+#include "util/imgui_extras.h"
+
 #include <imgui.h>
 
 guru::CCDebugger::CCDebugger(guru::AmigaApp* app, am::Amiga* amiga)
@@ -29,19 +31,35 @@ bool guru::CCDebugger::Draw()
 		return open;
 	}
 
-	if (ImGui::CollapsingHeader("Beam Info", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		DrawBeamInfo();
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
+		ImGui::BeginChild("Child_Side", ImVec2(212, 0), true, 0);
+
+		if (ImGui::CollapsingHeader("Beam Info", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			DrawBeamInfo();
+		}
+
+		if (ImGui::CollapsingHeader("Colour Palette"))
+		{
+			DrawColourPalette();
+		}
+
+		if (ImGui::CollapsingHeader("Bitplane Control"))
+		{
+			DrawBitplaneControl();
+		}
+
+		ImGui::EndChild();
+		ImGui::PopStyleVar();
 	}
 
-	if (ImGui::CollapsingHeader("Colour Palette"))
-	{
-		DrawColourPalette();
-	}
+	ImGui::SameLine();
 
-	if (ImGui::CollapsingHeader("Bitplane Control"))
 	{
-		DrawBitplaneControl();
+		ImGui::BeginChild("", ImVec2(0, 0), false, 0);
+		DrawCopper();
+		ImGui::EndChild();
 	}
 
 	ImGui::End();
@@ -154,4 +172,189 @@ void guru::CCDebugger::DrawBitplaneControl()
 	ImGui::Checkbox("PF2PRI", &pf2pri);
 
 	ImGui::Columns(1);
+}
+
+void guru::CCDebugger::DrawCopper()
+{
+	using util::ActiveButton;
+
+	auto& copper = m_amiga->GetCopper();
+	const bool running = m_app->IsRunning();
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+	ImGui::BeginChild("Copper_Controls", ImVec2(0, 104), true, 0);
+
+
+
+	int cop1lc = uint32_t(m_amiga->PeekRegister(am::Register::COP1LCH)) << 16
+		| m_amiga->PeekRegister(am::Register::COP1LCL);
+
+	int cop2lc = uint32_t(m_amiga->PeekRegister(am::Register::COP2LCH)) << 16
+		| m_amiga->PeekRegister(am::Register::COP2LCL);
+
+	ImGui::Columns(2, 0, false);
+
+	{
+		const auto dmaconr = m_amiga->PeekRegister(am::Register::DMACONR);
+		const uint16_t enabled = uint16_t(am::Dma::COPEN) | uint16_t(am::Dma::DMAEN);
+		bool dma = (dmaconr & enabled) == enabled;
+		ImGui::Checkbox("DMA Enabled", &dma);
+	}
+
+	{
+		ImGui::PushItemWidth(64);
+		int pc = copper.pc;
+		ImGui::InputInt("PC", &pc, 0, 0, ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_CharsHexadecimal);
+		ImGui::PopItemWidth();
+	}
+
+	ImGui::NextColumn();
+
+	ImGui::PushItemWidth(64);
+	ImGui::InputInt("COP1LC", &cop1lc, 0, 0, ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_CharsHexadecimal);
+	ImGui::InputInt("COP2LC", &cop2lc, 0, 0, ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_CharsHexadecimal);
+	ImGui::PopItemWidth();
+
+	ImGui::Columns(1);
+
+	if (ActiveButton("Start", !running))
+	{
+		m_amiga->ClearBreakpoint();
+		m_app->SetRunning(true);
+	}
+	ImGui::SameLine();
+	if (ActiveButton("Stop", running))
+	{
+		m_app->SetRunning(false);
+		m_amiga->ClearBreakpoint();
+	}
+	ImGui::SameLine();
+	if (ActiveButton("Step", !running))
+	{
+		m_amiga->ClearBreakpoint();
+		m_amiga->EnableBreakOnCopper();
+		m_app->SetRunning(true);
+	}
+
+	auto DoBreakOnLine = [this](int inc)
+	{
+		auto frameLength = m_amiga->GetFrameLength();
+		auto vpos = m_amiga->GetVPos();
+		vpos += inc;
+		if (vpos > frameLength)
+		{
+			vpos -= frameLength;
+		}
+		m_amiga->EnableBreakOnLine(vpos);
+	};
+
+	if (ActiveButton("+1 Line", !running))
+	{
+		m_amiga->ClearBreakpoint();
+		DoBreakOnLine(1);
+		m_app->SetRunning(true);
+	}
+	ImGui::SameLine();
+	if (ActiveButton("+10 Lines", !running))
+	{
+		m_amiga->ClearBreakpoint();
+		DoBreakOnLine(10);
+		m_app->SetRunning(true);
+	}
+	ImGui::SameLine();
+	if (ActiveButton("+50 Lines", !running))
+	{
+		m_amiga->ClearBreakpoint();
+		DoBreakOnLine(50);
+		m_app->SetRunning(true);
+	}
+	ImGui::SameLine();
+	if (ActiveButton("+1 Frame", !running))
+	{
+		m_amiga->ClearBreakpoint();
+		m_amiga->EnableBreakOnLine(0);
+		m_app->SetRunning(true);
+	}
+
+	ImGui::EndChild();
+
+	ImGui::TextUnformatted("Disassemble from :");
+
+	ImGui::PushItemWidth(128);
+	ImGui::Combo("##SELECT", &m_disassembleMode, "PC\0COP1LC\0COP2LC\0Address\0");
+	ImGui::PopItemWidth();
+	if (m_disassembleMode == 3)
+	{
+		ImGui::SameLine();
+		ImGui::PushItemWidth(64);
+		ImGui::InputInt("##ADDR", (int*)&m_disassembleAddr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+		ImGui::PopItemWidth();
+	}
+
+	uint32_t startAddr = 0;
+
+	switch(m_disassembleMode)
+	{
+	case 0: // PC
+		startAddr = copper.pc;
+		break;
+	case 1: // COP1LC
+		startAddr = cop1lc;
+		break;
+	case 2: // COP2LC
+		startAddr = cop2lc;
+		break;
+	case 3:
+		startAddr = m_disassembleAddr;
+		break;
+	}
+
+	const uint32_t endAddr = startAddr + 0x80;
+
+	ImGui::BeginChild("Copper_Disassembly", ImVec2(0, 0), true, 0);
+
+	for (uint32_t pc = startAddr; pc < endAddr; pc += 4)
+	{
+		auto instr = DisassembleCopperInstruction(pc);
+		ImGui::Text("%08X %c %s", pc, (pc == copper.pc) ? '>' : ':', instr.c_str());
+	}
+
+	ImGui::EndChild();
+	ImGui::PopStyleVar();
+}
+
+std::string guru::CCDebugger::DisassembleCopperInstruction(uint32_t addr) const
+{
+	const auto ir1 = m_amiga->PeekWord(addr);
+	const auto ir2 = m_amiga->PeekWord(addr+2);
+
+	char buffer[40];
+	auto charleft = sizeof(buffer);
+
+	if ((ir1 & 1) == 0)
+	{
+		const char* regName = "???";
+		const int reg = uint16_t(ir1 & 0x1ff);
+		if (reg < int(am::Register::End))
+		{
+			regName = am::kRegisterNames[reg/2];
+		}
+		const auto count = sprintf_s(buffer, charleft, "MOVE %03x(%s), %04x", reg, regName, ir2);
+	}
+	else
+	{
+		const auto verticalBeamPos = ir1 >> 8;
+		const auto horizontalBeamPos = ir1 & 0xff;
+		const auto verticalPositionCompare = (ir2 >> 8) & 0x7f;
+		const auto horizontalPositionCompare = ir2 & 0xfe;
+
+		const bool isWait = (ir2 & 1) == 0;
+
+		const auto count = sprintf_s(buffer, charleft, "%s VP=%02x HP=%02x VE=%02x HE=%02x",
+			(isWait ? "WAIT" : "SKIP"),
+			verticalBeamPos, horizontalBeamPos,
+			verticalPositionCompare, horizontalPositionCompare);
+	}
+
+	return buffer;
 }

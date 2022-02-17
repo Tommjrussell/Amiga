@@ -42,6 +42,11 @@ void guru::AmigaApp::SetRunning(bool running)
 
 	m_isStarting = running;
 	m_isRunning = running;
+
+	if (running)
+	{
+		m_debugger->OnStartRunning();
+	}
 }
 
 bool guru::AmigaApp::Update()

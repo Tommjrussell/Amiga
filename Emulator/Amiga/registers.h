@@ -15,6 +15,8 @@ namespace am
 	// those registers have been changed in the Enhanced Chip Set
 	// (ECS).
 
+	constexpr uint32_t kRegisterLimit = 0x1E6;
+
 	enum class Register : uint32_t
 	{
 		BLTDDAT = 0x000,	//  ER  A       Blitter destination early read (dummy address)
@@ -251,6 +253,8 @@ namespace am
 		HCENTER = 0x1E2,  	//	W   A(E)    Horizontal position for Vsync on interlace
 		DIWHIGH = 0x1E4,  	//	W   AD(E)   Display window - upper bits for start, stop
 
+		End = 0x1E6,		// Value marking the end of the defined registers
+
 		// Combined registers - these are pseudo 32-bit registers made by combining H and L registers from the list above.
 		// The address is the same as the H component register.
 		DSKPT	= 0x020,
@@ -282,6 +286,26 @@ namespace am
 		SPR5PT = 0x134,
 		SPR6PT = 0x138,
 		SPR7PT = 0x13C,
+	};
+
+	extern const char* const kRegisterNames[size_t(Register::End)/2];
+
+	// The function of the bits in the DMACON/DMACONR registers
+	enum class Dma : uint16_t
+	{
+		BBUSY = 0x4000,
+		BZERO = 0x2000,
+		BLTPRI = 0x0400,
+		DMAEN = 0x0200,
+		BPLEN = 0x0100,
+		COPEN = 0x0080,
+		BLTEN = 0x0040,
+		SPREN = 0x0020,
+		DSKEN = 0x0010,
+		AUD3EN = 0x0008,
+		AUD2EN = 0x0004,
+		AUD1EN = 0x0002,
+		AUD0EN = 0x0001,
 	};
 
 }

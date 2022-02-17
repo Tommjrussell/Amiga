@@ -23,6 +23,7 @@ namespace guru
 		~Debugger();
 
 		bool Draw();
+		void OnStartRunning();
 
 	private:
 
