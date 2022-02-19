@@ -54,6 +54,10 @@ namespace am
 		uint8_t ddra = 0;
 		uint8_t ddrb = 0;
 
+		uint8_t irqData = 0;
+		uint8_t irqMask = 0;
+		bool intSignal = false;
+
 		uint32_t tod = 0;			// time-of-day counter (TOD)
 		uint32_t todLatched = 0;	// latched value of TOD. Counter continues to count while latched.
 		uint32_t todAlarm = 0;
@@ -195,6 +199,7 @@ namespace am
 		void TickCIAtod(int num);
 
 		void TickCIATimers();
+		void SetCIAInterrupt(CIA& cia, uint8_t bit);
 
 		uint16_t ReadRegister(uint32_t regNum);
 		void WriteRegister(uint32_t regNum, uint16_t value);

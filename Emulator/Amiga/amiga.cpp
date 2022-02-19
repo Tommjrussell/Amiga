@@ -948,6 +948,19 @@ void am::Amiga::WriteCIA(int num, int port, uint8_t data)
 		}
 	}	break;
 
+	case 0xd:
+	{
+		if ((data & 0x80) != 0)
+		{
+			cia.irqMask |= (data & 0x7f);
+		}
+		else
+		{
+			cia.irqMask &= ~data;
+		}
+		// TODO : Should updating the mask fire existing interrupts? (HRM implies no)
+	}	break;
+
 	case 0xe: // Control Register A
 	{
 		cia.timer[0].ConfigTimerCIA(data);
@@ -1085,6 +1098,15 @@ uint8_t am::Amiga::ReadCIA(int num, int port)
 		return uint8_t((cia.todLatched & 0x00ff0000) >> 16);
 	}
 
+	case 0xd:
+	{
+		uint8_t irqs = cia.irqData;
+		cia.irqData = 0;
+		cia.intSignal = false;
+		DoInterruptRequest();
+		return irqs;
+	}
+
 	case 0xe:
 		return cia.timer[0].controlRegister;
 
@@ -1094,6 +1116,17 @@ uint8_t am::Amiga::ReadCIA(int num, int port)
 	default:
 		// TODO : other registers
 		return 0;
+	}
+}
+
+void am::Amiga::SetCIAInterrupt(CIA& cia, uint8_t bit)
+{
+	cia.irqData |= bit;
+	if ((cia.irqMask & bit) != 0)
+	{
+		cia.irqData |= 0x80;
+		cia.intSignal = true;
+		DoInterruptRequest();
 	}
 }
 
@@ -1107,7 +1140,10 @@ void am::Amiga::TickCIAtod(int num)
 	cia.tod++;
 	cia.tod &= 0x00ffffff; // only 24 bits available
 
-	// TODO : tod alarm
+	if (cia.tod == cia.todAlarm)
+	{
+		SetCIAInterrupt(cia, 0x04);
+	}
 }
 
 void am::Amiga::TickCIATimers()
@@ -1119,15 +1155,14 @@ void am::Amiga::TickCIATimers()
 		if (m_cia[i].timer[0].Tick())
 		{
 			tickTimerB = true;
+			SetCIAInterrupt(m_cia[i], 0x01);
 		}
 
-		if (tickTimerB)
+		if (tickTimerB && m_cia[i].timer[1].Tick())
 		{
-			m_cia[i].timer[1].Tick();
+			SetCIAInterrupt(m_cia[i], 0x02);
 		}
 	}
-
-	// TODO : interrupts!
 }
 
 uint16_t am::Amiga::PeekRegister(am::Register r) const
@@ -1365,8 +1400,28 @@ void am::Amiga::DoInterruptRequest()
 	// The interrupt request or mask registers have potentially been altered.
 	// So see if we need to inform the CPU of an interrupt request (and at which level).
 
+	// Also check if either CIA chip is signalling an interrupt
+
 	auto& intreqr = Reg(Register::INTREQR);
 	auto& intenar = Reg(Register::INTENAR);
+
+	if (m_cia[0].intSignal) // CIAA
+	{
+		intreqr |= 0x0008;
+	}
+	else
+	{
+		intreqr &= ~0x0008;
+	}
+
+	if (m_cia[1].intSignal) // CIAB
+	{
+		intreqr |= 0x2000;
+	}
+	else
+	{
+		intreqr &= ~0x2000;
+	}
 
 	if ((intenar & 0x4000) == 0)
 	{
