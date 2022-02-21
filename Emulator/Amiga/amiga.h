@@ -110,6 +110,19 @@ namespace am
 		bool waitForBlitter = false;
 	};
 
+	struct Blitter
+	{
+		uint32_t ptr[4];
+		int32_t modulo[4];
+		uint16_t data[4];
+		bool enabled[4];
+		int lines;
+		int wordsPerLine;
+		uint16_t firstWordMask;
+		uint16_t lastWordMask;
+		uint8_t minterm;
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -180,6 +193,7 @@ namespace am
 	private:
 
 		uint16_t ReadChipWord(uint32_t addr) const;
+		void WriteChipWord(uint32_t addr, uint16_t value);
 
 		std::tuple<Mapped, uint8_t*> GetMappedMemory(uint32_t addr);
 
@@ -193,6 +207,8 @@ namespace am
 		void UpdateScreen();
 
 		bool DoCopper();
+
+		void DoInstantBlitter();
 
 		void WriteCIA(int num, int port, uint8_t data);
 		uint8_t ReadCIA(int num, int port);
@@ -214,6 +230,21 @@ namespace am
 		uint16_t Reg(am::Register r) const
 		{
 			return m_registers[uint32_t(r) / 2];
+		}
+
+		void SetLongPointerValue(uint32_t& ptr, bool IsHighWord, uint16_t value)
+		{
+			if (IsHighWord)
+			{
+				// TODO : mask top bits differently depending on OCS/ECS
+				ptr &= 0x0000ffff;
+				ptr |= uint32_t(value & 0x001f) << 16;
+			}
+			else
+			{
+				ptr &= 0xffff0000;
+				ptr |= value & 0xfffe;
+			}
 		}
 
 		uint16_t UpdateFlagRegister(am::Register r, uint16_t value);
@@ -269,6 +300,10 @@ namespace am
 		int m_cpuBusyTimer = 0;
 
 		Copper m_copper = {};
+
+		Blitter m_blitter = {};
+
+		int m_blitterCountdown = 0;
 
 		std::vector<uint16_t> m_registers;
 

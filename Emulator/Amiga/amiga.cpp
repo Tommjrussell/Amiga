@@ -629,6 +629,13 @@ uint16_t am::Amiga::ReadChipWord(uint32_t addr) const
 	return SwapEndian(value);
 }
 
+void am::Amiga::WriteChipWord(uint32_t addr, uint16_t value)
+{
+	const uint32_t chipRamMask = uint32_t(m_chipRam.size()) - 1;
+	value = SwapEndian(value);
+	memcpy(&m_chipRam[addr & chipRamMask], &value, 2);
+}
+
 bool am::Amiga::ExecuteFor(uint64_t cclocks)
 {
 	const auto runTill = m_totalCClocks + cclocks;
@@ -738,6 +745,18 @@ void am::Amiga::DoOneTick()
 
 	UpdateScreen();
 
+	if (m_blitterCountdown > 0)
+	{
+		--m_blitterCountdown;
+		if (m_blitterCountdown == 0)
+		{
+			auto& dmaconr = Reg(Register::DMACONR);
+			dmaconr &= ~0x4000; // Clear BBUSY flag
+			// Signal blitter interrupt
+			WriteRegister(uint32_t(am::Register::INTREQ), 0x8040);
+		}
+	}
+
 	m_timerCountdown--;
 	if (m_timerCountdown == 0)
 	{
@@ -833,6 +852,9 @@ void am::Amiga::Reset()
 	m_frameLength = m_isNtsc ? kNTSC_longFrameLines : kPAL_longFrameLines;
 
 	m_copper = {};
+
+	m_blitter = {};
+	m_blitterCountdown = 0;
 
 	m_cia[0] = {};
 	m_cia[1] = {};
@@ -1253,6 +1275,38 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		// control values to this register.
 		break;
 
+	case am::Register::BLTCON0:
+	case am::Register::BLTCON1:
+	case am::Register::BLTAFWM:
+	case am::Register::BLTALWM:
+		break;
+
+	case am::Register::BLTCPTH:
+	case am::Register::BLTCPTL:
+	case am::Register::BLTBPTH:
+	case am::Register::BLTBPTL:
+	case am::Register::BLTAPTH:
+	case am::Register::BLTAPTL:
+	case am::Register::BLTDPTH:
+	case am::Register::BLTDPTL:
+	{
+		auto ptr = (regNum - uint32_t(Register::BLTCPTH)) / 4;
+		SetLongPointerValue(m_blitter.ptr[ptr], (regIndex & 1) == 0, value);
+	}	break;
+
+	case am::Register::BLTSIZE:
+		DoInstantBlitter();
+		break;
+
+	case am::Register::BLTCMOD:
+	case am::Register::BLTBMOD:
+	case am::Register::BLTAMOD:
+	case am::Register::BLTDMOD:
+	case am::Register::BLTCDAT:
+	case am::Register::BLTBDAT:
+	case am::Register::BLTADAT:
+		break;
+
 	case am::Register::COP1LCH:
 	case am::Register::COP1LCL:
 	case am::Register::COP2LCH:
@@ -1637,5 +1691,315 @@ void am::Amiga::UpdateScreen()
 	{
 		auto index = dispYPos * kScreenBufferWidth + (dispXPos * 4);
 		(*m_currentScreen.get())[index + x] = m_palette[0];
+	}
+}
+
+namespace
+{
+	uint16_t DoBlitterFunction(uint8_t minterm, uint16_t a, uint16_t b, uint16_t c)
+	{
+		//////////////////////
+		//	A	B	C		?
+		//	0	0	0		1
+		//	0	0	1		2
+		//	0	1	0		4
+		//	0	1	1		8
+		//	1	0	0		16
+		//	1	0	1		32
+		//	1	1	0		64
+		//	1	1	1		128
+
+		uint16_t val = 0;
+
+		if (minterm & 0x01)
+		{
+			val |= ~(a|b|c);
+		}
+		if (minterm & 0x02)
+		{
+			val |= ~(a|b) & c;
+		}
+		if (minterm & 0x04)
+		{
+			val |= ~(a|c) & b;
+		}
+		if (minterm & 0x08)
+		{
+			val |= b & c & ~a;
+		}
+		if (minterm & 0x10)
+		{
+			val |= a & ~(b|c);
+		}
+		if (minterm & 0x20)
+		{
+			val |= a & c & ~b;
+		}
+		if (minterm & 0x40)
+		{
+			val |= a & b & ~c;
+		}
+		if (minterm & 0x80)
+		{
+			val |= a & b & c;
+		}
+
+		return val;
+	}
+}
+
+void am::Amiga::DoInstantBlitter()
+{
+	const auto con0 = Reg(Register::BLTCON0);
+	const auto con1 = Reg(Register::BLTCON1);
+	m_blitter.minterm = uint8_t(con0 & 0xff);
+
+	const auto bltsize = Reg(Register::BLTSIZE);
+	m_blitter.wordsPerLine = bltsize & 0x3f;
+	if (m_blitter.wordsPerLine == 0)
+		m_blitter.wordsPerLine = 0x40;
+
+	m_blitter.lines = bltsize >> 6;
+	if (m_blitter.lines == 0)
+		m_blitter.lines = 0x400;
+
+	m_blitter.modulo[0] = int16_t(Reg(Register::BLTCMOD) & 0xfffe);
+	m_blitter.modulo[1] = int16_t(Reg(Register::BLTBMOD) & 0xfffe);
+	m_blitter.modulo[2] = int16_t(Reg(Register::BLTAMOD) & 0xfffe);
+	m_blitter.modulo[3] = int16_t(Reg(Register::BLTDMOD) & 0xfffe);
+
+	m_blitter.data[0] = Reg(Register::BLTCDAT);
+	m_blitter.data[1] = Reg(Register::BLTBDAT);
+	m_blitter.data[2] = Reg(Register::BLTADAT);
+	m_blitter.data[3] = Reg(Register::BLTDDAT);
+
+	auto aShift = uint16_t((con0 >> 12) & 0x000f);
+	auto bShift = uint16_t((con1 >> 12) & 0x000f);
+
+	m_blitter.enabled[0] = (con0 & 0x0200) != 0;
+	m_blitter.enabled[1] = (con0 & 0x0400) != 0;
+	m_blitter.enabled[2] = (con0 & 0x0800) != 0;
+	m_blitter.enabled[3] = (con0 & 0x0100) != 0;
+
+	int blitClks = 0;
+
+	auto& dmaconr = Reg(Register::DMACONR);
+
+	dmaconr |= 0x2000; // Initialise BZERO to true
+
+	if ((con1 & 1) == 0) // normal mode
+	{
+		bool descendingMode = (con1 & 0x02) != 0;
+
+		if (descendingMode)
+		{
+			m_blitter.modulo[0] = -m_blitter.modulo[0];
+			m_blitter.modulo[1] = -m_blitter.modulo[1];
+			m_blitter.modulo[2] = -m_blitter.modulo[2];
+			m_blitter.modulo[3] = -m_blitter.modulo[3];
+		}
+
+		m_blitter.firstWordMask = Reg(Register::BLTAFWM);
+		m_blitter.lastWordMask = Reg(Register::BLTALWM);
+
+		auto exclusiveFill = (con1 & 0x0010) != 0;
+		auto inclusiveFill = (con1 & 0x0008) != 0;
+
+		uint32_t addTo = descendingMode ? -2 : 2;
+
+		uint16_t aShiftIn = 0;
+		uint16_t bShiftIn = 0;
+
+		uint16_t res;
+		uint32_t resAddr;
+		bool resQueued = false;
+
+		for (auto l = 0; l < m_blitter.lines; l++)
+		{
+			for (auto w = 0; w < m_blitter.wordsPerLine; w++)
+			{
+				for (auto c = 0; c < 3; c++)
+				{
+					if (m_blitter.enabled[c])
+					{
+						m_blitter.data[c] = ReadChipWord(m_blitter.ptr[c] & 0xffff'fffe);
+						++blitClks;
+						m_blitter.ptr[c] += addTo;
+					}
+				}
+
+				if (resQueued)
+				{
+					WriteChipWord(resAddr, res);
+					++blitClks;
+					resQueued = false;
+				}
+
+				uint16_t aData = m_blitter.data[2];
+
+				if (w == 0)
+				{
+					aData &= m_blitter.firstWordMask;
+				}
+				if (w == m_blitter.wordsPerLine - 1)
+				{
+					aData &= m_blitter.lastWordMask;
+				}
+
+				uint16_t savedA = aData;
+
+				if (descendingMode)
+				{
+					aData = ((uint32_t(aData) << 16 | aShiftIn) >> (16 - aShift)) & 0xffff;
+				}
+				else
+				{
+					aData = (((uint32_t(aShiftIn) << 16) | aData) >> aShift) & 0xffff;
+				}
+				aShiftIn = savedA;
+
+				uint16_t bData = m_blitter.data[1];
+				uint16_t savedB = bData;
+
+				if (descendingMode)
+				{
+					bData = ((uint32_t(bData) << 16 | bShiftIn) >> (16 - bShift)) & 0xffff;
+				}
+				else
+				{
+					bData = (((uint32_t(bShiftIn) << 16) | bData) >> bShift) & 0xffff;
+				}
+				bShiftIn = savedB;
+
+				res = DoBlitterFunction(m_blitter.minterm, aData, bData, m_blitter.data[0]);
+				if (m_blitter.enabled[3])
+				{
+					resQueued = true;
+					resAddr = m_blitter.ptr[3] & 0xffff'fffe;
+					m_blitter.ptr[3] += addTo;
+				}
+
+				if (res != 0)
+				{
+					dmaconr &= ~0x2000;
+				}
+			}
+
+			for (auto c = 0; c < 4; c++)
+			{
+				if (m_blitter.enabled[c])
+				{
+					m_blitter.ptr[c] += m_blitter.modulo[c];
+				}
+			}
+		}
+
+		if (resQueued)
+		{
+			WriteChipWord(resAddr, res);
+			++blitClks;
+		}
+	}
+	else // line mode
+	{
+		enum Dir { LEFT = 1, RIGHT = 2, UP = 4, DOWN = 8 };
+
+		Dir maj_step[] = { Dir::DOWN,	Dir::UP,	Dir::DOWN,	Dir::UP,	Dir::RIGHT, Dir::LEFT,	Dir::RIGHT,	Dir::LEFT };
+		Dir min_step[] = { Dir::RIGHT,	Dir::RIGHT, Dir::LEFT,	Dir::LEFT,	Dir::DOWN,	Dir::DOWN,	Dir::UP,	Dir::UP };
+
+		int inc_majmin = m_blitter.modulo[2];
+		int inc_maj = m_blitter.modulo[1];
+		int acc = int16_t(m_blitter.ptr[2]);
+		int octantCode = (con1 >> 2) & 7;
+		int count = m_blitter.lines;
+
+		bool dot_on_row = false;
+		bool onedot = (con1 & 2) != 0;
+
+		uint32_t aShiftIn = 0;
+		uint32_t bShiftIn = uint32_t(m_blitter.data[1]) << 16;
+
+		while (count)
+		{
+			if (m_blitter.enabled[0])
+			{
+				m_blitter.data[0] = ReadChipWord(m_blitter.ptr[0] & 0xffff'fffe);
+				++blitClks;
+			}
+
+			if (!(onedot && dot_on_row))
+			{
+				uint16_t aData = m_blitter.data[2];
+				uint32_t savedA = uint32_t(aData) << 16;
+
+				aData = ((aShiftIn | aData) >> aShift) & 0xffff;
+				aShiftIn = savedA;
+
+				uint16_t bData = m_blitter.data[1];
+				uint32_t savedB = uint32_t(bData) << 16;
+
+				bData = ((bShiftIn | bData) >> bShift) & 0xffff;
+				bShiftIn = savedB;
+
+				auto res = DoBlitterFunction(m_blitter.minterm, aData, bData, m_blitter.data[0]);
+				WriteChipWord(m_blitter.ptr[3] & 0xffff'fffe, res);
+				++blitClks;
+
+				dot_on_row = true;
+			}
+
+			int step = 0;
+
+			if (acc < 0)
+			{
+				step = maj_step[octantCode];
+				acc += inc_maj;
+			}
+			else
+			{
+				step = maj_step[octantCode] | min_step[octantCode];
+				acc += inc_majmin;
+			}
+
+			if ((step & Dir::LEFT) != 0)
+			{
+				aShift = (aShift - 1) & 0xf;
+				if (aShift == 0xf)
+				{
+					m_blitter.ptr[0] -= 2;
+					m_blitter.ptr[3] -= 2;
+				}
+			}
+			else if ((step & Dir::RIGHT) != 0)
+			{
+				aShift = (aShift + 1) & 0xf;
+				if (aShift == 0)
+				{
+					m_blitter.ptr[0] += 2;
+					m_blitter.ptr[3] += 2;
+				}
+			}
+
+			if ((step & Dir::UP) != 0)
+			{
+				m_blitter.ptr[0] -= m_blitter.modulo[0];
+				m_blitter.ptr[3] -= m_blitter.modulo[0];
+				dot_on_row = false;
+			}
+			else if ((step & Dir::DOWN) != 0)
+			{
+				m_blitter.ptr[0] += m_blitter.modulo[0];
+				m_blitter.ptr[3] += m_blitter.modulo[0];
+				dot_on_row = false;
+			}
+
+			count--;
+		}
+	}
+
+	if (blitClks > 0)
+	{
+		dmaconr |= 0x4000; // set BBUSY bit
+		m_blitterCountdown = blitClks;
 	}
 }
