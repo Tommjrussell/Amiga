@@ -296,16 +296,16 @@ namespace am
 		BBUSY = 0x4000,
 		BZERO = 0x2000,
 		BLTPRI = 0x0400,
-		DMAEN = 0x0200,
-		BPLEN = 0x0100,
-		COPEN = 0x0080,
-		BLTEN = 0x0040,
-		SPREN = 0x0020,
-		DSKEN = 0x0010,
-		AUD3EN = 0x0008,
-		AUD2EN = 0x0004,
-		AUD1EN = 0x0002,
-		AUD0EN = 0x0001,
+		DMAEN = 0x0200,		// Master
+		BPLEN = 0x0100,		// Bitplanes
+		COPEN = 0x0080,		// Copper
+		BLTEN = 0x0040,		// Blitter
+		SPREN = 0x0020,		// Sprites
+		DSKEN = 0x0010,		// Disk
+		AUD3EN = 0x0008,	// Audio 3
+		AUD2EN = 0x0004,	// Audio 2
+		AUD1EN = 0x0002,	// Audio 1
+		AUD0EN = 0x0001,	// Audio 0
 	};
 
 }

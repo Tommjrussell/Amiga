@@ -690,12 +690,12 @@ bool am::Amiga::ExecuteToEndOfCpuInstruction()
 
 void am::Amiga::DoOneTick()
 {
-	const bool evenClock = (m_hPos & 1) == 0;
-	bool chipBusBusy = false;
+	bool chipBusBusy = DoScanlineDma();
 
+	const bool evenClock = (m_hPos & 1) == 0;
 	if (evenClock)
 	{
-		chipBusBusy = DoCopper();
+		DoCopper(chipBusBusy);
 	}
 
 	if (m_m68000->GetExecutionState() == cpu::ExecuteState::ReadyToDecode && CpuReady())
@@ -783,6 +783,18 @@ void am::Amiga::DoOneTick()
 			m_lineLength = kPAL_lineLength;
 		}
 
+		if (DmaEnabled(Dma::BPLEN) && m_vPos >= m_windowStartY && m_vPos < m_windowStopY)
+		{
+			// Apply Modulos for the bitplane pointers.
+			// TODO : figure out the exact conditions for these
+			auto bpl1mod = int16_t(Reg(Register::BPL1MOD) & 0xfffe);
+			auto bpl2mod = int16_t(Reg(Register::BPL2MOD) & 0xfffe);
+			for (int i = 0; i < m_bitplane.numPlanesEnabled; i++)
+			{
+				m_bitplane.ptr[i] += (i & 1) ? bpl2mod : bpl1mod;
+			}
+		}
+
 		m_vPos++;
 		if (m_vPos == m_frameLength)
 		{
@@ -850,6 +862,11 @@ void am::Amiga::Reset()
 	m_hPos = 0;
 	m_lineLength = m_isNtsc ? kNTSC_shortLineLength : kPAL_lineLength;
 	m_frameLength = m_isNtsc ? kNTSC_longFrameLines : kPAL_longFrameLines;
+
+	m_windowStartX = 0;
+	m_windowStopX = 0;
+	m_windowStartY = 0;
+	m_windowStopY = 0;
 
 	m_copper = {};
 
@@ -1256,20 +1273,6 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	switch (am::Register(regNum & ~1))
 	{
 
-	case am::Register::DMACON:
-		UpdateFlagRegister(Register::DMACONR, value & 0x87ff);
-		break;
-
-	case am::Register::INTENA:
-		UpdateFlagRegister(am::Register::INTENAR, value);
-		DoInterruptRequest();
-		break;
-
-	case am::Register::INTREQ:
-		UpdateFlagRegister(am::Register::INTREQR, value);
-		DoInterruptRequest();
-		break;
-
 	case am::Register::SERPER:
 		// Serial port curretly not emulated but silently accept
 		// control values to this register.
@@ -1351,6 +1354,53 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		}
 	}	break;
 
+	case am::Register::DIWSTRT:
+		m_windowStartX = value & 0x00ff;
+		m_windowStartY = (value & 0xff00) >> 8;
+		break;
+
+	case am::Register::DIWSTOP:
+		m_windowStopX = (value & 0x00ff) | 0x0100;
+		m_windowStopY = (value & 0xff00) >> 8;
+		m_windowStopY |= (((~m_windowStopY) & 0x80u) << 1u);
+		break;
+
+	case am::Register::DDFSTRT:
+	case am::Register::DDFSTOP:
+		break;
+
+	case am::Register::DMACON:
+		UpdateFlagRegister(am::Register::DMACONR, value & 0x87ff);
+		break;
+
+	case am::Register::INTENA:
+		UpdateFlagRegister(am::Register::INTENAR, value);
+		DoInterruptRequest();
+		break;
+
+	case am::Register::INTREQ:
+		UpdateFlagRegister(am::Register::INTREQR, value);
+		DoInterruptRequest();
+		break;
+
+	case am::Register::BPL1PTH:
+	case am::Register::BPL1PTL:
+	case am::Register::BPL2PTH:
+	case am::Register::BPL2PTL:
+	case am::Register::BPL3PTH:
+	case am::Register::BPL3PTL:
+	case am::Register::BPL4PTH:
+	case am::Register::BPL4PTL:
+	case am::Register::BPL5PTH:
+	case am::Register::BPL5PTL:
+	case am::Register::BPL6PTH:
+	case am::Register::BPL6PTL:
+	{
+		const auto planeIdx = (regNum - uint32_t(Register::BPL1PTH)) / 4;
+		const auto highWord = (regNum & 0b010) == 0;
+		SetLongPointerValue(m_bitplane.ptr[planeIdx], highWord, value);
+	}	break;
+
 	case am::Register::BPLCON0:
 		m_bitplane.hires = ((value & 0x8000) != 0);
 		m_bitplane.numPlanesEnabled = (value & 0x7000) >> 12;
@@ -1377,6 +1427,10 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	/// ECS only register - leave unimplemented for now
 	//case am::Register::BPLCON3:
 	//	break;
+
+	case am::Register::BPL1MOD:
+	case am::Register::BPL2MOD:
+		break;
 
 	case am::Register::BPL1DAT:
 	case am::Register::BPL2DAT:
@@ -1429,7 +1483,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		auto bb = b | (b << 4);
 		m_palette[colourIndex] = MakeColourRef(rr, gg, bb);
 
-		// Halve the brightness
+		// Reduce brightness by 50%
 		rr = (rr >> 1) & 0xf7;
 		gg = (gg >> 1) & 0xf7;
 		bb = (bb >> 1) & 0xf7;
@@ -1504,15 +1558,15 @@ void am::Amiga::DoInterruptRequest()
 	m_m68000->SetInterruptControl(systemToProcessorIntLevel[msb]);
 }
 
-bool am::Amiga::CopperDmaEnabled() const
+bool am::Amiga::DmaEnabled(am::Dma dmaChannel) const
 {
 	const auto dmaconr = Reg(Register::DMACONR);
-	const uint16_t enabled = uint16_t(Dma::COPEN) | uint16_t(Dma::DMAEN);
+	const uint16_t enabled = uint16_t(dmaChannel) | uint16_t(Dma::DMAEN);
 
 	return (dmaconr & enabled) == enabled;
 }
 
-bool am::Amiga::DoCopper()
+void am::Amiga::DoCopper(bool& chipBusBusy)
 {
 	switch (m_copper.state)
 	{
@@ -1535,11 +1589,12 @@ bool am::Amiga::DoCopper()
 
 	case CopperState::Read:
 	{
-		if (CopperDmaEnabled())
+		if (DmaEnabled(Dma::COPEN) && !chipBusBusy)
 		{
 			m_copper.readAddr = m_copper.pc;
 			m_copper.pc += 4;
 			m_copper.ir1 = ReadChipWord(m_copper.readAddr);
+			chipBusBusy = true;
 			m_copper.readAddr += 2;
 
 			if ((m_copper.ir1 & 1) == 0) // Move
@@ -1550,95 +1605,107 @@ bool am::Amiga::DoCopper()
 			{
 				m_copper.state = CopperState::WaitSkip;
 			}
-			return true;
+
 		}
 	}	break;
 
 	case CopperState::Move:
 	{
-		m_copper.ir2 = ReadChipWord(m_copper.readAddr);
-
-		bool skipping = m_copper.skipping;
-		m_copper.skipping = false;
-
-		const auto copcon = Reg(Register::COPCON);
-		const bool danger = (copcon & 0x02) != 0; // bit 01 is 'danger' bit
-
-		const auto reg = m_copper.ir1 & 0x01ff;
-
-		if (reg < 0x40 || (!danger && reg < 0x80))
+		if (!chipBusBusy)
 		{
-			// Based on information gleaned from forums,
-			// attempting to move to a 'banned' register
-			// stops the copper (even if skipping).
-			m_copper.state = CopperState::Stopped;
-		}
-		else
-		{
-			if (!skipping)
+			m_copper.ir2 = ReadChipWord(m_copper.readAddr);
+			chipBusBusy = true;
+
+			bool skipping = m_copper.skipping;
+			m_copper.skipping = false;
+
+			const auto copcon = Reg(Register::COPCON);
+			const bool danger = (copcon & 0x02) != 0; // bit 01 is 'danger' bit
+
+			const auto reg = m_copper.ir1 & 0x01ff;
+
+			if (reg < 0x40 || (!danger && reg < 0x80))
 			{
-				WriteRegister(reg, m_copper.ir2);
+				// Based on information gleaned from forums,
+				// attempting to move to a 'banned' register
+				// stops the copper (even if skipping).
+				m_copper.state = CopperState::Stopped;
 			}
-			m_copper.state = CopperState::Read;
-		}
+			else
+			{
+				if (!skipping)
+				{
+					WriteRegister(reg, m_copper.ir2);
+				}
+				m_copper.state = CopperState::Read;
+			}
 
-		if (m_breakAtNextCopperInstruction)
-		{
-			m_breakAtNextCopperInstruction = false;
-			m_running = false;
+			if (m_breakAtNextCopperInstruction)
+			{
+				m_breakAtNextCopperInstruction = false;
+				m_running = false;
 
+			}
 		}
 	}	break;
 
 
 	case CopperState::WaitSkip:
 	{
-		m_copper.ir2 = ReadChipWord(m_copper.readAddr);
-		m_copper.skipping = false;
-
-		const auto verticalWaitPos = uint16_t(m_copper.ir1 >> 8);
-		const auto horizontalWaitPos = uint16_t(m_copper.ir1 & 0x00fe);
-
-		const auto verticalMask = uint16_t(((m_copper.ir2 >> 8) & 0x7f) | 0x80);
-		const auto horizontalMask = uint16_t(m_copper.ir2 & 0x00fe);
-
-		if ((m_copper.ir2 & 1) == 0) // Wait
+		if (!chipBusBusy)
 		{
-			m_copper.waitForBlitter = (m_copper.ir2 & 0x8000) == 0;
-			m_copper.verticalMask = verticalMask;
-			m_copper.verticalWaitPos = verticalWaitPos;
-			m_copper.horizontalMask = horizontalMask;
-			m_copper.horizontalWaitPos = horizontalWaitPos;
-			m_copper.state = CopperState::Waiting;
-		}
-		else // Skip
-		{
-			const auto verticalComparePos = uint16_t(m_vPos) & verticalMask;
-			const auto horizontalComparePos = uint16_t(m_hPos) & horizontalMask;
+			m_copper.ir2 = ReadChipWord(m_copper.readAddr);
+			chipBusBusy = true;
+			m_copper.skipping = false;
 
-			if (verticalComparePos < (verticalWaitPos & verticalMask) ||
-				(verticalComparePos == (verticalWaitPos & verticalMask) && horizontalComparePos < (horizontalWaitPos & horizontalMask)))
+			const auto verticalWaitPos = uint16_t(m_copper.ir1 >> 8);
+			const auto horizontalWaitPos = uint16_t(m_copper.ir1 & 0x00fe);
+
+			const auto verticalMask = uint16_t(((m_copper.ir2 >> 8) & 0x7f) | 0x80);
+			const auto horizontalMask = uint16_t(m_copper.ir2 & 0x00fe);
+
+			if ((m_copper.ir2 & 1) == 0) // Wait
 			{
-				m_copper.skipping = true;
+				m_copper.waitForBlitter = (m_copper.ir2 & 0x8000) == 0;
+				m_copper.verticalMask = verticalMask;
+				m_copper.verticalWaitPos = verticalWaitPos;
+				m_copper.horizontalMask = horizontalMask;
+				m_copper.horizontalWaitPos = horizontalWaitPos;
+				m_copper.state = CopperState::Waiting;
 			}
-			m_copper.state = CopperState::Read;
-
-			if (m_breakAtNextCopperInstruction)
+			else // Skip
 			{
-				m_breakAtNextCopperInstruction = false;
-				m_running = false;
+				const auto verticalComparePos = uint16_t(m_vPos) & verticalMask;
+				const auto horizontalComparePos = uint16_t(m_hPos) & horizontalMask;
+
+				if (verticalComparePos < (verticalWaitPos & verticalMask) ||
+					(verticalComparePos == (verticalWaitPos & verticalMask) && horizontalComparePos < (horizontalWaitPos & horizontalMask)))
+				{
+					m_copper.skipping = true;
+				}
+				m_copper.state = CopperState::Read;
+
+				if (m_breakAtNextCopperInstruction)
+				{
+					m_breakAtNextCopperInstruction = false;
+					m_running = false;
+				}
 			}
 		}
 	}	break;
 
 	case CopperState::Abort:
 	{
-		// Happens when we're half way through executing a wait/skip instruction and an external source (CPU) strobes the
-		// COPJMP* register. We must complete the fetching but not perform the wait/skip.
+		if (!chipBusBusy)
+		{
+			// Happens when we're half way through executing a wait/skip instruction and an external source (CPU) strobes the
+			// COPJMP* register. We must complete the fetching but not perform the wait/skip.
 
-		m_copper.ir2 = ReadChipWord(m_copper.readAddr);
-		m_copper.skipping = false;
-		m_copper.state = CopperState::Read;
+			m_copper.ir2 = ReadChipWord(m_copper.readAddr);
+			chipBusBusy = true;
+			m_copper.skipping = false;
+			m_copper.state = CopperState::Read;
+		}
 	}	break;
 
 	case CopperState::WakeUp:
@@ -1653,8 +1720,6 @@ bool am::Amiga::DoCopper()
 	}	break;
 
 	}
-
-	return false;
 }
 
 void am::Amiga::UpdateScreen()
@@ -2002,4 +2067,68 @@ void am::Amiga::DoInstantBlitter()
 		dmaconr |= 0x4000; // set BBUSY bit
 		m_blitterCountdown = blitClks;
 	}
+}
+
+bool am::Amiga::DoScanlineDma()
+{
+	const bool oddClock = (m_hPos & 1) != 0;
+
+	if (m_hPos == m_lineLength - 1)
+	{
+		// There are 4 memory refresh cycles. the first appears at cycle -1
+		// i.e. the last cycle of the previous line.
+		return true;
+	}
+
+	if (m_hPos < 0x14)
+	{
+		// This range spans the memory refresh, disk DMA and Audio DMA
+		// which cannot be overridden
+
+		if (!oddClock)
+			return false;
+
+		if (m_hPos < 0x6)
+			return true; // Memory refresh cycle
+
+		// TODO: Disk DMA
+		// TODO: Audio DMA
+		return false;
+	}
+
+	// Sprites and display DMA only active on lines within the display window
+	if (m_vPos < m_windowStartY || m_vPos >= m_windowStopY)
+		return false;
+
+	// Sprites can be wiped out by display DMA so check that first
+	if (DmaEnabled(Dma::BPLEN))
+	{
+		auto ddfstrt = Reg(Register::DDFSTRT) & 0b0000000011111100;
+		auto ddfstop = Reg(Register::DDFSTOP) & 0b0000000011111100;
+
+		ddfstrt = std::max(ddfstrt, 0x18);
+		ddfstop = std::min(ddfstop, 0xd8);
+
+		if (m_hPos >= ddfstrt && m_hPos < (ddfstop + 0x08))
+		{
+			// we are in the fetch zone
+
+			static constexpr uint8_t kPlaneReadOrderLores[8] = { ~0, 3, 5, 1, ~0, 2, 4, 0 };
+			static constexpr uint8_t kPlaneReadOrderHires[4] = { 3, 1, 2, 0 };
+
+			int bp = m_bitplane.hires
+				? kPlaneReadOrderHires[m_hPos & 0x03]
+				: kPlaneReadOrderLores[m_hPos & 0x07];
+
+			if (bp < m_bitplane.numPlanesEnabled)
+			{
+				const auto bplData = ReadChipWord(m_bitplane.ptr[bp]);
+				m_bitplane.ptr[bp] += 2;
+				WriteRegister(uint32_t(Register::BPL1DAT) + (bp << 1), bplData);
+				return true;
+			}
+		}
+	}
+
+	return false;
 }

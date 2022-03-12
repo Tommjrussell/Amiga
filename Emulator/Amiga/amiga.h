@@ -11,6 +11,7 @@
 namespace am
 {
 	enum class Register : uint32_t;
+	enum class Dma : uint16_t;
 
 	enum class ChipRamConfig : uint32_t
 	{
@@ -206,8 +207,8 @@ namespace am
 
 		void UpdateScreen();
 
-		bool DoCopper();
-
+		void DoCopper(bool& chipBusBusy);
+		bool DoScanlineDma();
 		void DoInstantBlitter();
 
 		void WriteCIA(int num, int port, uint8_t data);
@@ -249,7 +250,7 @@ namespace am
 
 		uint16_t UpdateFlagRegister(am::Register r, uint16_t value);
 
-		bool CopperDmaEnabled() const;
+		bool DmaEnabled(am::Dma dmaChannel) const;
 
 	private:
 		std::vector<uint8_t> m_rom;
@@ -280,12 +281,18 @@ namespace am
 			uint8_t playfieldPriority = 0;
 			uint8_t playfieldDelay[2] = {};
 			uint8_t playfieldSpritePri[2] = {};
+			uint32_t ptr[6] = {};
 		} m_bitplane;
 
 		int m_vPos = 0;
 		int m_hPos = 0;
 		int m_lineLength = 0;
 		int m_frameLength = 0;
+
+		int m_windowStartX = 0;
+		int m_windowStopX = 0;
+		int m_windowStartY = 0;
+		int m_windowStopY = 0;
 
 		uint32_t m_breakpoint  = 0;
 		uint32_t m_breakAtRegister = 0;
