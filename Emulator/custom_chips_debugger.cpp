@@ -57,7 +57,7 @@ bool guru::CCDebugger::Draw()
 	ImGui::SameLine();
 
 	{
-		ImGui::BeginChild("", ImVec2(0, 0), false, 0);
+		ImGui::BeginChild("##CopperChild", ImVec2(0, 0), false, 0);
 		DrawCopper();
 		ImGui::EndChild();
 	}

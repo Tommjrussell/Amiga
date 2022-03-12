@@ -96,7 +96,7 @@ bool guru::Debugger::Draw()
 
 	// Assembly view
 
-	ImGui::BeginChild("", ImVec2(0, 0), false, 0);
+	ImGui::BeginChild("##AssemblyView", ImVec2(0, 0), false, 0);
 
 	int flags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue;
 	if (m_trackPc)
@@ -344,7 +344,7 @@ void guru::Debugger::DrawControls()
 
 	ImGui::SameLine();
 	ImGui::PushItemWidth(64);
-	ImGui::InputInt("", (int*)&m_breakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue);
+	ImGui::InputInt("##breakpoint", (int*)&m_breakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue);
 	ImGui::PopItemWidth();
 
 	if (ImGui::Checkbox("Break on unimplemented register", &m_breakOnUnimplementedRegister))
