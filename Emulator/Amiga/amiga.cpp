@@ -2181,3 +2181,38 @@ bool am::Amiga::DoScanlineDma()
 
 	return false;
 }
+
+const std::string& am::Amiga::GetDisk(int driveNum) const
+{
+	assert(driveNum >= 0 && driveNum < 4);
+	return m_floppyDrive[driveNum].fileId;
+}
+
+bool am::Amiga::SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskImage)
+{
+	assert(driveNum >= 0 && driveNum < 4);
+
+	if (fileId.empty() || diskImage.empty())
+		return false;
+
+	auto& drive = m_floppyDrive[driveNum];
+
+	drive.fileId = fileId;
+	drive.diskImage = std::move(diskImage);
+	drive.diskInserted = true;
+
+	return true;
+}
+
+void am::Amiga::EjectDisk(int driveNum)
+{
+	assert(driveNum >= 0 && driveNum < 4);
+
+	auto& drive = m_floppyDrive[driveNum];
+	if (!drive.fileId.empty())
+	{
+		drive.fileId.clear();
+		drive.diskImage.clear();
+		drive.diskInserted = false;
+	}
+}

@@ -17,6 +17,7 @@ namespace guru
 	class Debugger;
 	class CCDebugger;
 	class MemoryEditor;
+	class DiskManager;
 
 	class AmigaApp
 	{
@@ -52,5 +53,6 @@ namespace guru
 		std::unique_ptr<Debugger> m_debugger;
 		std::unique_ptr<CCDebugger> m_ccDebugger;
 		std::unique_ptr<MemoryEditor> m_memoryEditor;
+		std::unique_ptr<DiskManager> m_diskManager;
 	};
 }

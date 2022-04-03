@@ -4,6 +4,7 @@
 #include "debugger.h"
 #include "custom_chips_debugger.h"
 #include "memory_editor.h"
+#include "disk_manager.h"
 
 #include "util/file.h"
 
@@ -99,6 +100,14 @@ void guru::AmigaApp::Render()
 				}
 			}
 
+			if (ImGui::MenuItem("Disk Manager", ""))
+			{
+				if (!m_diskManager)
+				{
+					m_diskManager = std::make_unique<DiskManager>(m_amiga.get());
+				}
+			}
+
 			ImGui::Separator();
 
 			if (ImGui::MenuItem("Quit", "ALT+F4"))
@@ -132,6 +141,14 @@ void guru::AmigaApp::Render()
 		if (!m_memoryEditor->Draw())
 		{
 			m_memoryEditor.reset();
+		}
+	}
+
+	if (m_diskManager)
+	{
+		if (!m_diskManager->Draw())
+		{
+			m_diskManager.reset();
 		}
 	}
 

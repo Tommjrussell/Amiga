@@ -7,6 +7,7 @@
 #include <tuple>
 #include <vector>
 #include <memory>
+#include <string>
 
 namespace am
 {
@@ -124,6 +125,15 @@ namespace am
 		uint8_t minterm;
 	};
 
+	struct FloppyDrive
+	{
+		std::string fileId;
+		std::vector<uint8_t> diskImage;
+
+		bool exists = true;
+		bool diskInserted = false;
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -184,6 +194,10 @@ namespace am
 		{
 			return m_frameLength;
 		}
+
+		const std::string& GetDisk(int driveNum) const;
+		bool SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskImage);
+		void EjectDisk(int driveNum);
 
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
@@ -329,6 +343,9 @@ namespace am
 
 		std::unique_ptr<ScreenBuffer> m_currentScreen;
 		std::unique_ptr<ScreenBuffer> m_lastScreen;
+
+		FloppyDrive m_floppyDrive[4];
+
 	};
 
 }

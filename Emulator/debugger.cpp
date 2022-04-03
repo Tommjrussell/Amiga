@@ -207,7 +207,7 @@ void guru::Debugger::UpdateAssembly()
 		}
 
 		const uint32_t addr = m_disassembler->pc;
-		std::string line = HexToString(addr);
+		std::string line = util::HexToString(addr);
 		line += onPc ? " > " : " : ";
 		line += m_disassembler->Disassemble();
 		m_disassembly.emplace_back(DisassemblyLine{addr, line});
