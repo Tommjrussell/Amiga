@@ -10,7 +10,7 @@ uniform float magnification;
 
 void main()
 {
-	vec2 uv = fragCoord / winSize;
+	vec2 uv = fragCoord / vec2(1024, 512);
 
 	fragColor = texture( myTextureSampler, uv).rgb;
 }
