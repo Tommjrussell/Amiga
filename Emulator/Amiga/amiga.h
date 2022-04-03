@@ -320,6 +320,13 @@ namespace am
 
 		std::array<ColourRef, 64> m_palette;
 
+		constexpr static int kPixelBufferSize = 64;
+		constexpr static int kPixelBufferMask = kPixelBufferSize - 1;
+
+		std::array<uint8_t, kPixelBufferSize> m_pixelBuffer;
+		int m_pixelBufferLoadPtr = 0;
+		int m_pixelBufferReadPtr = 0;
+
 		std::unique_ptr<ScreenBuffer> m_currentScreen;
 		std::unique_ptr<ScreenBuffer> m_lastScreen;
 	};

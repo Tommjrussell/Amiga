@@ -886,6 +886,12 @@ void am::Amiga::Reset()
 	m_exclusiveBusRws = 0;
 	m_totalCClocks = 0;
 
+	m_currentScreen->fill(0);
+	m_lastScreen->fill(0);
+
+	m_pixelBufferLoadPtr = 0;
+	m_pixelBufferReadPtr = 0;
+
 	m_m68000->Reset(m_cpuBusyTimer);
 }
 
@@ -1433,6 +1439,24 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		break;
 
 	case am::Register::BPL1DAT:
+	{
+		memset(m_pixelBuffer.data() + m_pixelBufferLoadPtr, 0, 16);
+
+		for (int i = 0; i < m_bitplane.numPlanesEnabled; i++)
+		{
+			auto bits = Reg(Register(int(Register::BPL1DAT) + (i * 2)));
+
+			for (int j = 0; j < 16; j++)
+			{
+				m_pixelBuffer[m_pixelBufferLoadPtr + j] |= (bits & (32768u >> j)) != 0 ? (1 << i) : 0;
+			}
+		}
+
+		m_pixelBufferReadPtr = (m_pixelBufferLoadPtr - (m_bitplane.hires ? 24 : 12)) & kPixelBufferMask; // TODO: apply horizontal delay
+		m_pixelBufferLoadPtr = (m_pixelBufferLoadPtr + 16) & kPixelBufferMask;
+
+	}	break;
+
 	case am::Register::BPL2DAT:
 	case am::Register::BPL3DAT:
 	case am::Register::BPL4DAT:
@@ -1732,30 +1756,55 @@ void am::Amiga::UpdateScreen()
 	// The screen position lags behind the beam counter and may therefore be
 	// still on the previous line.
 
-	auto dispYPos = m_vPos - 36;
-	auto dispXPos = m_hPos - 0x41;
+	int line = m_vPos;
+	int xPos = m_hPos - 0x41;
 
-	if (dispXPos < 0)
+	auto bufferLine = line - 36;
+
+	if (xPos < 0)
 	{
-		dispXPos += kPAL_lineLength;
-		dispYPos--;
+		xPos += kPAL_lineLength;
+		bufferLine--;
 	}
-	else if (dispXPos == 0 && dispYPos == (m_isNtsc ? 216 : 272))
+	else if (xPos == 0 && bufferLine == (m_isNtsc ? 216 : 272))
 	{
 		// Swap the screens immediately once the bottom line is finished.
 		std::swap(m_currentScreen, m_lastScreen);
 		return;
 	}
 
-	if (dispYPos < 0 || dispYPos >= (m_isNtsc ? 216 : 272) || dispXPos >= 0xa8)
+	if (bufferLine < 0 || bufferLine >= (m_isNtsc ? 216 : 272) || xPos >= 0xa8)
 		return;
 
-	// Currently only writes the background colour as if all bitplanes are disabled.
-
-	for (int x = 0; x < 4; x++)
+	if (line >= m_windowStartY && line < m_windowStopY)
 	{
-		auto index = dispYPos * kScreenBufferWidth + (dispXPos * 4);
-		(*m_currentScreen.get())[index + x] = m_palette[0];
+		auto startIndex = (m_windowStartX - 0x79) * 2;
+		auto endIndex = (m_windowStopX - 0x79) * 2;
+
+		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
+
+		for (int x = 0; x < 4; x++)
+		{
+			if ((xPos*4 + x) >= startIndex && (xPos * 4 + x) < endIndex)
+			{
+				auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x / 2) & kPixelBufferMask];
+
+				(*m_currentScreen.get())[index + x] = m_palette[value];
+			}
+			else
+			{
+				(*m_currentScreen.get())[index + x] = m_palette[0];
+			}
+		}
+		m_pixelBufferReadPtr += m_bitplane.hires ? 4 : 2;
+	}
+	else
+	{
+		for (int x = 0; x < 4; x++)
+		{
+			auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
+			(*m_currentScreen.get())[index + x] = m_palette[0];
+		}
 	}
 }
 
