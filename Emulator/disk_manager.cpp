@@ -77,7 +77,9 @@ bool guru::DiskManager::Draw()
 			strncpy_s(buffer, diskName.c_str(), diskName.length() + 1);
 		}
 
-		ImGui::InputText("", buffer, 256, ImGuiInputTextFlags_ReadOnly);
+		char driveFileId[10];
+		sprintf_s(driveFileId, "##DRIVE%02d", i);
+		ImGui::InputText(driveFileId, buffer, 256, ImGuiInputTextFlags_ReadOnly);
 		ImGui::PopItemWidth();
 
 		ImGui::EndChild();
