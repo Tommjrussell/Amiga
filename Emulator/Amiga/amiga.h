@@ -2,6 +2,7 @@
 
 #include "68000.h"
 #include "screen_buffer.h"
+#include "mfm.h"
 
 #include <stdint.h>
 #include <tuple>
@@ -128,10 +129,12 @@ namespace am
 	struct FloppyDrive
 	{
 		std::string fileId;
-		std::vector<uint8_t> diskImage;
+		std::vector<uint8_t> diskContents;
 
 		bool exists = true;
 		bool diskInserted = false;
+
+		DiskImage diskImage;
 	};
 
 	class Amiga : public cpu::IBus

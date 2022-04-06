@@ -2188,18 +2188,20 @@ const std::string& am::Amiga::GetDisk(int driveNum) const
 	return m_floppyDrive[driveNum].fileId;
 }
 
-bool am::Amiga::SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskImage)
+bool am::Amiga::SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskContents)
 {
 	assert(driveNum >= 0 && driveNum < 4);
 
-	if (fileId.empty() || diskImage.empty())
+	if (fileId.empty() || diskContents.empty())
 		return false;
 
 	auto& drive = m_floppyDrive[driveNum];
 
 	drive.fileId = fileId;
-	drive.diskImage = std::move(diskImage);
+	drive.diskContents = std::move(diskContents);
 	drive.diskInserted = true;
+
+	EncodeDiskImage(drive.diskContents, drive.diskImage);
 
 	return true;
 }
@@ -2212,6 +2214,7 @@ void am::Amiga::EjectDisk(int driveNum)
 	if (!drive.fileId.empty())
 	{
 		drive.fileId.clear();
+		drive.diskContents.clear();
 		drive.diskImage.clear();
 		drive.diskInserted = false;
 	}
