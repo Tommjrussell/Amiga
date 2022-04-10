@@ -88,6 +88,11 @@ bool guru::Debugger::Draw()
 			DrawCIAs();
 		}
 
+		if (ImGui::CollapsingHeader("Disk Drives"))
+		{
+			DrawDiskDrives();
+		}
+
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 	}
@@ -436,10 +441,10 @@ void guru::Debugger::DrawSystemInterrupts()
 			bool enabled = (intenar & (1 << (13 - i))) != 0;
 			bool set     = (intreqr & (1 << (13 - i))) != 0;
 
-			ImGui::Checkbox("", &enabled);
+			ImGui::Checkbox("##", &enabled);
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip(enabled ? "Enabled" : "Disabled");
-			ImGui::Checkbox("", &set);
+			ImGui::Checkbox("##", &set);
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip(set ? (enabled ? "Set" : "Set but disabled") : "Not set");
 			ImGui::NextColumn();
@@ -498,7 +503,7 @@ void guru::Debugger::DrawDMA()
 
 				bool set = (dmaconr & (1 << (14 - i))) != 0;
 
-				ImGui::Checkbox("", &set);
+				ImGui::Checkbox("##", &set);
 				if (ImGui::IsItemHovered())
 					ImGui::SetTooltip(desc[i]);
 			}
@@ -589,4 +594,38 @@ void guru::Debugger::DrawCIAs()
 	}
 	ImGui::PopStyleVar(2);
 	ImGui::Columns(1);
+}
+
+void guru::Debugger::DrawDiskDrives()
+{
+	ImGui::Columns(2, NULL, false);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+
+	auto DrawDriveDetails = [&](int n)
+	{
+		char id[20];
+		sprintf_s(id, "DF%d", n);
+		ImGui::BeginChild(id, ImVec2(0, 80), true, 0);
+
+		auto& drive = m_amiga->GetFloppyDrive(n);
+
+		ImGui::Text("%s %s", id, drive.selected ? "(selected)" : "");
+		ImGui::Text(drive.motorOn ? "Motor ON" : "Motor OFF");
+		ImGui::Text("Side     : %d", drive.side);
+		ImGui::Text("Cylinder : %d", drive.currCylinder);
+
+		ImGui::EndChild();
+	};
+
+	DrawDriveDetails(0);
+	DrawDriveDetails(2);
+	ImGui::NextColumn();
+	DrawDriveDetails(1);
+	DrawDriveDetails(3);
+
+	ImGui::PopStyleVar(2);
+	ImGui::Columns(1);
+
 }

@@ -892,6 +892,13 @@ void am::Amiga::Reset()
 	m_pixelBufferLoadPtr = 0;
 	m_pixelBufferReadPtr = 0;
 
+	for (int i = 0; i < 4; i++)
+	{
+		m_floppyDrive[i] = {};
+	}
+	m_driveSelected = -1;
+	m_diskRotationCountdown = 0;
+
 	m_m68000->Reset(m_cpuBusyTimer);
 }
 
@@ -918,6 +925,11 @@ void am::Amiga::WriteCIA(int num, int port, uint8_t data)
 	{
 		cia.prb &= ~cia.ddrb;
 		cia.prb |= data & cia.ddrb;
+
+		if (num == 1)
+		{
+			ProcessDriveCommands(data);
+		}
 	}	break;
 
 	case 0x2: // ddra
@@ -1778,14 +1790,14 @@ void am::Amiga::UpdateScreen()
 
 	if (line >= m_windowStartY && line < m_windowStopY)
 	{
-		auto startIndex = (m_windowStartX - 0x79) * 2;
-		auto endIndex = (m_windowStopX - 0x79) * 2;
+		auto startIndex = m_windowStartX - 0x79;
+		auto endIndex = m_windowStopX - 0x79;
 
 		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
 
 		for (int x = 0; x < 4; x++)
 		{
-			if ((xPos*4 + x) >= startIndex && (xPos * 4 + x) < endIndex)
+			if ((xPos * 2 + x / 2) >= startIndex && (xPos * 2 + x / 2) < endIndex)
 			{
 				auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x / 2) & kPixelBufferMask];
 
@@ -1796,6 +1808,12 @@ void am::Amiga::UpdateScreen()
 				(*m_currentScreen.get())[index + x] = m_palette[0];
 			}
 		}
+
+		for (int x = 0; x < 4; x++)
+		{
+			m_pixelBuffer[(m_pixelBufferReadPtr + x / 2) & kPixelBufferMask] = 0;
+		}
+
 		m_pixelBufferReadPtr += m_bitplane.hires ? 4 : 2;
 	}
 	else
@@ -2185,23 +2203,22 @@ bool am::Amiga::DoScanlineDma()
 const std::string& am::Amiga::GetDisk(int driveNum) const
 {
 	assert(driveNum >= 0 && driveNum < 4);
-	return m_floppyDrive[driveNum].fileId;
+	return m_floppyDisk[driveNum].fileId;
 }
 
-bool am::Amiga::SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskContents)
+bool am::Amiga::SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& data)
 {
 	assert(driveNum >= 0 && driveNum < 4);
 
-	if (fileId.empty() || diskContents.empty())
+	if (fileId.empty() || data.empty())
 		return false;
 
-	auto& drive = m_floppyDrive[driveNum];
+	auto& disk = m_floppyDisk[driveNum];
 
-	drive.fileId = fileId;
-	drive.diskContents = std::move(diskContents);
-	drive.diskInserted = true;
+	disk.fileId = fileId;
+	disk.data = std::move(data);
 
-	EncodeDiskImage(drive.diskContents, drive.diskImage);
+	EncodeDiskImage(disk.data, disk.image);
 
 	return true;
 }
@@ -2210,12 +2227,142 @@ void am::Amiga::EjectDisk(int driveNum)
 {
 	assert(driveNum >= 0 && driveNum < 4);
 
-	auto& drive = m_floppyDrive[driveNum];
-	if (!drive.fileId.empty())
+	auto& disk = m_floppyDisk[driveNum];
+	if (!disk.fileId.empty())
 	{
-		drive.fileId.clear();
-		drive.diskContents.clear();
-		drive.diskImage.clear();
-		drive.diskInserted = false;
+		disk.fileId.clear();
+		disk.data.clear();
+		disk.image.clear();
+
+		UpdateFloppyDriveFlags();
+	}
+}
+
+void am::Amiga::ProcessDriveCommands(uint8_t data)
+{
+	bool driveSelected = false;
+
+	// Cannot find documentation about what happens when more than one drive is selected at once. I'm assuming all well-behaved
+	// software will not do this. For now I will assume that the lowest-numbered enabled drive is the selected one.
+
+	bool step = (data & 0x01) == 0;
+	bool directionInwards = (data & 0x02) == 0;
+	bool side = (data & 0x04) == 0;
+
+	for (int i = 0; i < 4; i++)
+	{
+		auto& drive = m_floppyDrive[i];
+
+		if ((data & (0x1 << (i + 3))) == 0)
+		{
+			if (driveSelected)
+			{
+				// selected multiple drives? how to handle this?
+				_ASSERTE(false);
+			}
+			else
+			{
+				m_driveSelected = i;
+				driveSelected = true;
+			}
+
+			if (!drive.selected)
+			{
+				// If selection has just changed
+
+				drive.motorOn = (data & 0x80) == 0; // latched on select (active low)
+
+				if (drive.motorOn)
+				{
+					m_diskRotationCountdown = 700000;
+				}
+
+				// Set step signal to off for this drive so that it can be registered if set at same time as selection.
+				drive.stepSignal = false;
+			}
+
+			drive.selected = true;
+			// TODO : what else needs to be set?
+		}
+		else
+		{
+			drive.selected = false;
+		}
+	}
+
+	if (!driveSelected)
+	{
+		m_driveSelected = -1; // no drive is selected
+	}
+	else
+	{
+		auto& drive = m_floppyDrive[m_driveSelected];
+		const bool diskInserted = !m_floppyDisk[m_driveSelected].fileId.empty();
+
+		if (step && !drive.stepSignal)
+		{
+			// step signal has gone low - do a step
+
+			// Update the DSKCHANGE flag - low when no disk is in drive.
+			if (diskInserted)
+			{
+				drive.diskChange = true;
+			}
+
+			if (directionInwards)
+			{
+				if (drive.currCylinder < 80)
+					drive.currCylinder++;
+			}
+			else
+			{
+				if (drive.currCylinder > 0)
+					drive.currCylinder--;
+			}
+		}
+
+		drive.side = side ? 1 : 0;
+
+		drive.stepSignal = step;
+	}
+
+	UpdateFloppyDriveFlags();
+}
+
+void am::Amiga::UpdateFloppyDriveFlags()
+{
+	auto SetFlag = [](uint8_t& flags, uint8_t bits, bool set)
+	{
+		if (set)
+		{
+			flags |= bits;
+		}
+		else
+		{
+			flags &= ~bits;
+		}
+	};
+
+	if (m_driveSelected == -1)
+	{
+		// set flags for no drive selected. (hold all drive flags high)
+		m_cia[0].pra |= 0b0011'1100;
+	}
+	else
+	{
+		auto& drive = m_floppyDrive[m_driveSelected];
+
+		SetFlag(m_cia[0].pra, 0x04, drive.diskChange); // DSKCHANGE
+		SetFlag(m_cia[0].pra, 0x08, false); // DSKPROT (currently all disks appear write-protected)
+		SetFlag(m_cia[0].pra, 0x10, drive.currCylinder != 0); // DSKTRACK0
+		if (drive.motorOn)
+		{
+			const bool diskInserted = !m_floppyDisk[m_driveSelected].fileId.empty();
+			SetFlag(m_cia[0].pra, 0x20, !diskInserted); // DSKRDY
+		}
+		else
+		{
+			SetFlag(m_cia[0].pra, 0x20, true); // id data (report as amiga drive (all 1s))
+		}
 	}
 }

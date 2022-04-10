@@ -128,13 +128,19 @@ namespace am
 
 	struct FloppyDrive
 	{
+		bool selected = false;
+		bool motorOn = false;
+		bool stepSignal = false;
+		bool diskChange = false;
+		uint8_t currCylinder = 0;
+		uint8_t side = 0;
+	};
+
+	struct FloppyDisk
+	{
 		std::string fileId;
-		std::vector<uint8_t> diskContents;
-
-		bool exists = true;
-		bool diskInserted = false;
-
-		DiskImage diskImage;
+		std::vector<uint8_t> data;
+		DiskImage image;
 	};
 
 	class Amiga : public cpu::IBus
@@ -172,6 +178,11 @@ namespace am
 		const Copper& GetCopper() const
 		{
 			return m_copper;
+		}
+
+		const FloppyDrive& GetFloppyDrive(int n) const
+		{
+			return m_floppyDrive[n];
 		}
 
 		void SetPC(uint32_t pc);
@@ -269,6 +280,9 @@ namespace am
 
 		bool DmaEnabled(am::Dma dmaChannel) const;
 
+		void ProcessDriveCommands(uint8_t data);
+		void UpdateFloppyDriveFlags();
+
 	private:
 		std::vector<uint8_t> m_rom;
 		std::vector<uint8_t> m_chipRam;
@@ -347,8 +361,10 @@ namespace am
 		std::unique_ptr<ScreenBuffer> m_currentScreen;
 		std::unique_ptr<ScreenBuffer> m_lastScreen;
 
+		FloppyDisk m_floppyDisk[4];
 		FloppyDrive m_floppyDrive[4];
-
+		int m_driveSelected;
+		int m_diskRotationCountdown; // Countdown to next full disk rotation.
 	};
 
 }
