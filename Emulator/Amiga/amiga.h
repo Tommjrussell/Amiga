@@ -213,6 +213,11 @@ namespace am
 		bool SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskImage);
 		void EjectDisk(int driveNum);
 
+		bool IsDiskInserted(int driveNum) const
+		{
+			return !m_floppyDisk[driveNum].fileId.empty();
+		}
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;

@@ -765,6 +765,21 @@ void am::Amiga::DoOneTick()
 		m_timerCountdown = 5;
 	}
 
+	// Update Floppy
+	if (m_driveSelected != -1 && IsDiskInserted(m_driveSelected))
+	{
+		if (m_floppyDrive[m_driveSelected].motorOn)
+		{
+			m_diskRotationCountdown--;
+			if (m_diskRotationCountdown == 0)
+			{
+				// Each revolution of the disk sets the CIAB flag signal
+				SetCIAInterrupt(m_cia[1], 0x10);
+				m_diskRotationCountdown = 700000;
+			}
+		}
+	}
+
 	m_totalCClocks++;
 	m_hPos++;
 
@@ -2227,9 +2242,9 @@ void am::Amiga::EjectDisk(int driveNum)
 {
 	assert(driveNum >= 0 && driveNum < 4);
 
-	auto& disk = m_floppyDisk[driveNum];
-	if (!disk.fileId.empty())
+	if (IsDiskInserted(driveNum))
 	{
+		auto& disk = m_floppyDisk[driveNum];
 		disk.fileId.clear();
 		disk.data.clear();
 		disk.image.clear();
@@ -2297,14 +2312,13 @@ void am::Amiga::ProcessDriveCommands(uint8_t data)
 	else
 	{
 		auto& drive = m_floppyDrive[m_driveSelected];
-		const bool diskInserted = !m_floppyDisk[m_driveSelected].fileId.empty();
 
 		if (step && !drive.stepSignal)
 		{
 			// step signal has gone low - do a step
 
 			// Update the DSKCHANGE flag - low when no disk is in drive.
-			if (diskInserted)
+			if (IsDiskInserted(m_driveSelected))
 			{
 				drive.diskChange = true;
 			}
@@ -2357,8 +2371,7 @@ void am::Amiga::UpdateFloppyDriveFlags()
 		SetFlag(m_cia[0].pra, 0x10, drive.currCylinder != 0); // DSKTRACK0
 		if (drive.motorOn)
 		{
-			const bool diskInserted = !m_floppyDisk[m_driveSelected].fileId.empty();
-			SetFlag(m_cia[0].pra, 0x20, !diskInserted); // DSKRDY
+			SetFlag(m_cia[0].pra, 0x20, !IsDiskInserted(m_driveSelected)); // DSKRDY
 		}
 		else
 		{
