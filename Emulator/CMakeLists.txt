@@ -17,6 +17,7 @@ add_executable (AmigaEmulator
 	"util/endian.h" "util/strings.h"
 	"util/imgui_extras.h" "util/imgui_extras.cpp"
 	"util/scope_guard.h"
+	"util/platform.h"
 	"debugger.cpp" "debugger.h"
 	"custom_chips_debugger.cpp" "custom_chips_debugger.h"
 	"memory_editor.cpp" "memory_editor.h"

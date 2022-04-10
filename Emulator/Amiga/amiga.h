@@ -143,6 +143,18 @@ namespace am
 		DiskImage image;
 	};
 
+	struct DiskDma
+	{
+		uint32_t ptr = 0;
+		uint32_t len = 0;
+		uint16_t encodedSequenceCounter = 0;
+		uint8_t  encodedSequenceBitOffset = 0;
+		bool writing = false;
+		bool inProgress = false;
+		bool secondaryDmaEnabled = false;
+		bool useWordSync = false;
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -287,6 +299,8 @@ namespace am
 
 		void ProcessDriveCommands(uint8_t data);
 		void UpdateFloppyDriveFlags();
+		void StartDiskDMA();
+		void DoDiskDMA();
 
 	private:
 		std::vector<uint8_t> m_rom;
@@ -370,6 +384,8 @@ namespace am
 		FloppyDrive m_floppyDrive[4];
 		int m_driveSelected;
 		int m_diskRotationCountdown; // Countdown to next full disk rotation.
+
+		DiskDma m_diskDma;
 	};
 
 }

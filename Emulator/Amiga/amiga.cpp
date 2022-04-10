@@ -3,6 +3,7 @@
 #include "registers.h"
 
 #include "util/endian.h"
+#include "util/platform.h"
 
 #include <cassert>
 
@@ -914,6 +915,8 @@ void am::Amiga::Reset()
 	m_driveSelected = -1;
 	m_diskRotationCountdown = 0;
 
+	m_diskDma = {};
+
 	m_m68000->Reset(m_cpuBusyTimer);
 }
 
@@ -1306,6 +1309,27 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	switch (am::Register(regNum & ~1))
 	{
 
+	case am::Register::DSKPTH:
+	case am::Register::DSKPTL:
+		SetLongPointerValue(m_diskDma.ptr, (regIndex & 1) == 0, value);
+		break;
+
+	case am::Register::DSKLEN:
+	{
+		// Writing to this register will start the DMA if enabled bit is already set.
+		const bool currentlyEnabled = m_diskDma.secondaryDmaEnabled;
+
+		m_diskDma.secondaryDmaEnabled = (value & 0x8000) != 0;
+		m_diskDma.writing = (value & 0x4000) != 0;
+		m_diskDma.len = (value & 0x3fff);
+		m_diskDma.inProgress = false;
+
+		if (currentlyEnabled && m_diskDma.secondaryDmaEnabled)
+		{
+			StartDiskDMA();
+		}
+	}	break;
+
 	case am::Register::SERPER:
 		// Serial port curretly not emulated but silently accept
 		// control values to this register.
@@ -1341,6 +1365,9 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	case am::Register::BLTCDAT:
 	case am::Register::BLTBDAT:
 	case am::Register::BLTADAT:
+		break;
+
+	case am::Register::DSKSYNC:
 		break;
 
 	case am::Register::COP1LCH:
@@ -2173,8 +2200,19 @@ bool am::Amiga::DoScanlineDma()
 		if (m_hPos < 0x6)
 			return true; // Memory refresh cycle
 
-		// TODO: Disk DMA
-		// TODO: Audio DMA
+		if (m_hPos < 0xc)
+		{
+			if (DmaEnabled(Dma::DSKEN) && m_diskDma.inProgress)
+			{
+				DoDiskDMA();
+				return true;
+			}
+		}
+		else
+		{
+			// TODO: Audio DMA
+		}
+
 		return false;
 	}
 
@@ -2377,5 +2415,77 @@ void am::Amiga::UpdateFloppyDriveFlags()
 		{
 			SetFlag(m_cia[0].pra, 0x20, true); // id data (report as amiga drive (all 1s))
 		}
+	}
+}
+
+void am::Amiga::StartDiskDMA()
+{
+	// TODO : work out what happens when DMA is disabled during transfer.
+
+	m_diskDma.inProgress = true;
+
+	if (!m_diskDma.useWordSync)
+		return;
+
+	auto wordSync = Reg(Register::DSKSYNC);
+	if (wordSync == 0x4489)
+	{
+		// This is the most likely sync word as it is part of the MFM sector sync pattern.
+		// We therefore will hard-code the response to this, which is to skip the first three words.
+
+		const auto currentSector = m_diskDma.encodedSequenceCounter / kMfmSectorSize;
+		const auto currentSectorOffset = m_diskDma.encodedSequenceCounter % kMfmSectorSize;
+
+		uint16_t nextSector = currentSector;
+
+		if (currentSector >= kSectorsPerTrack)
+		{
+			nextSector = 0;
+		}
+		else if (currentSectorOffset >= 6)
+		{
+			nextSector = ((currentSector + 1) % kSectorsPerTrack);
+		}
+
+		m_diskDma.encodedSequenceCounter = nextSector * kMfmSectorSize + 6;
+	}
+	else
+	{
+		// TODO: How to respond to other Sync Words. Do we care?
+		DEBUGGER_BREAK();
+	}
+}
+
+void am::Amiga::DoDiskDMA()
+{
+	if (m_diskDma.writing)
+	{
+		// TODO : implement disk writing
+		DEBUGGER_BREAK();
+	}
+	else
+	{
+		auto& drive = m_floppyDrive[m_driveSelected];
+		auto& disk = m_floppyDisk[m_driveSelected];
+		auto& track = disk.image[drive.currCylinder][drive.side];
+
+		uint16_t value = track[m_diskDma.encodedSequenceCounter];
+		value <<= 8;
+		m_diskDma.encodedSequenceCounter = (m_diskDma.encodedSequenceCounter + 1) % track.size();
+		value |= uint16_t(track[m_diskDma.encodedSequenceCounter]);
+		m_diskDma.encodedSequenceCounter = (m_diskDma.encodedSequenceCounter + 1) % track.size();
+
+		WriteChipWord(m_diskDma.ptr, value);
+		m_diskDma.ptr += 2;
+	}
+
+	m_diskDma.len--;
+	if (m_diskDma.len == 0)
+	{
+		m_diskDma.inProgress = false;
+		auto& intreqr = Reg(Register::INTREQR);
+		intreqr |= 0x0002; // set disk block finished interupt
+
+		DoInterruptRequest();
 	}
 }
