@@ -352,7 +352,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_pea,				//	pea     {ea:l}
 	&M68000::UnimplementOpcode,			//	tas     {ea:b}
 	&M68000::Opcode_tst,				//	tst.{s}   {ea}
-	&M68000::UnimplementOpcode,			//	trap    {v}
+	&M68000::Opcode_trap,				//	trap    {v}
 	&M68000::Opcode_link,				//	link    A{reg}, {immDis16}
 	&M68000::Opcode_unlk,				//	unlk    A{reg}
 	&M68000::Opcode_move_usp,			//	move    A{reg}, USP
@@ -377,7 +377,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_bcc,				//	b{cc}     {disp}
 	&M68000::Opcode_moveq,				//	moveq   {data}, D{REG}
 	&M68000::Opcode_divu,				//	divu    {ea:w}, D{REG}
-	&M68000::UnimplementOpcode,			//	divs    {ea:w}, D{REG}
+	&M68000::Opcode_divs,				//	divs    {ea:w}, D{REG}
 	&M68000::UnimplementOpcode,			//	sbcd    {m}
 	&M68000::Opcode_bitwise,			//	or.{s}    {ea}, D{REG}
 	&M68000::Opcode_bitwise,			//	or.{s}    D{REG}, {ea}
@@ -2491,6 +2491,51 @@ bool M68000::Opcode_divu(int& delay)
 	return true;
 }
 
+bool M68000::Opcode_divs(int& delay)
+{
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+	int32_t dividend = m_regs.d[reg];
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], 2, eaValue))
+	{
+		return false;
+	}
+
+	auto divisor = int16_t(eaValue);
+
+	SetFlag(Carry, false);
+
+	if (divisor == 0)
+	{
+		StartInternalException(5);
+		return true;
+	}
+
+	if ((abs(dividend) >> 16) >= abs(divisor))
+	{
+		delay += 8;
+		if (dividend < 0)
+			delay += 1;
+		SetFlag(Overflow, true);
+		return true;
+	}
+
+	const auto quotient = dividend / divisor;
+	const auto remainder = dividend % divisor;
+
+	m_regs.d[reg] = (uint32_t(remainder) << 16) | uint16_t(quotient);
+
+	SetFlag(Overflow, false);
+	SetFlag(Zero, quotient == 0);
+	SetFlag(Negative, quotient < 0);
+
+	// Timing for best case scenario
+	delay += 61;
+
+	return true;
+}
+
 bool M68000::Opcode_stop(int& delay)
 {
 	m_regs.status = uint16_t(m_immediateValue);
@@ -2503,5 +2548,14 @@ bool M68000::Opcode_stop(int& delay)
 
 bool M68000::Opcode_nop(int& delay)
 {
+	return true;
+}
+
+bool M68000::Opcode_trap(int& delay)
+{
+	m_bus->ReadBusWord(m_regs.pc); // pre-fetch of next word (ignored)
+	const auto v = 32 + (m_operation & 0b00000000'00001111);
+	StartInternalException(v);
+	delay += 5;
 	return true;
 }
