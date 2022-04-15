@@ -1836,27 +1836,46 @@ void am::Amiga::UpdateScreen()
 		auto endIndex = m_windowStopX - 0x79;
 
 		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
+		const auto loresPixelPos = xPos * 2;
 
-		for (int x = 0; x < 4; x++)
+		if (m_bitplane.hires)
 		{
-			if ((xPos * 2 + x / 2) >= startIndex && (xPos * 2 + x / 2) < endIndex)
+			for (int x = 0; x < 4; x++)
 			{
-				auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x / 2) & kPixelBufferMask];
+				if ((loresPixelPos + x / 2) >= startIndex && (loresPixelPos + x / 2) < endIndex)
+				{
+					auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask];
 
-				(*m_currentScreen.get())[index + x] = m_palette[value];
+					(*m_currentScreen.get())[index++] = m_palette[value];
+				}
+				else
+				{
+					(*m_currentScreen.get())[index++] = m_palette[0];
+				}
+				m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask] = 0;
 			}
-			else
-			{
-				(*m_currentScreen.get())[index + x] = m_palette[0];
-			}
+			m_pixelBufferReadPtr += 4;
 		}
-
-		for (int x = 0; x < 4; x++)
+		else
 		{
-			m_pixelBuffer[(m_pixelBufferReadPtr + x / 2) & kPixelBufferMask] = 0;
-		}
+			for (int x = 0; x < 2; x++)
+			{
+				if ((loresPixelPos + x) >= startIndex && (loresPixelPos + x) < endIndex)
+				{
+					auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask];
 
-		m_pixelBufferReadPtr += m_bitplane.hires ? 4 : 2;
+					(*m_currentScreen.get())[index++] = m_palette[value];
+					(*m_currentScreen.get())[index++] = m_palette[value];
+				}
+				else
+				{
+					(*m_currentScreen.get())[index++] = m_palette[0];
+					(*m_currentScreen.get())[index++] = m_palette[0];
+				}
+				m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask] = 0;
+			}
+			m_pixelBufferReadPtr += 2;
+		}
 	}
 	else
 	{
@@ -2229,7 +2248,9 @@ bool am::Amiga::DoScanlineDma()
 		ddfstrt = std::max(ddfstrt, 0x18);
 		ddfstop = std::min(ddfstop, 0xd8);
 
-		if (m_hPos >= ddfstrt && m_hPos < (ddfstop + 0x08))
+		const auto fetchEnd = ddfstop + (m_bitplane.hires ? 0xc : 0x8);
+
+		if (m_hPos >= ddfstrt && m_hPos < fetchEnd)
 		{
 			// we are in the fetch zone
 
