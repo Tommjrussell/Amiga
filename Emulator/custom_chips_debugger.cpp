@@ -33,7 +33,7 @@ bool guru::CCDebugger::Draw()
 
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
-		ImGui::BeginChild("Child_Side", ImVec2(212, 0), true, 0);
+		ImGui::BeginChild("Child_Side", ImVec2(240, 0), true, 0);
 
 		if (ImGui::CollapsingHeader("Beam Info", ImGuiTreeNodeFlags_DefaultOpen))
 		{
@@ -170,6 +170,45 @@ void guru::CCDebugger::DrawBitplaneControl()
 
 	auto pf2pri = (bplcon2 & 0b0000'0000'0100'0000) != 0;
 	ImGui::Checkbox("PF2PRI", &pf2pri);
+
+	ImGui::Columns(1);
+	ImGui::Separator();
+	ImGui::Columns(2, 0, false);
+
+	const auto diwstrt = m_amiga->PeekRegister(am::Register::DIWSTRT);
+	const auto diwstop = m_amiga->PeekRegister(am::Register::DIWSTOP);
+
+	auto startX = diwstrt & 0x00ff;
+	auto stopX = 0x0100 | (diwstop & 0x00ff);
+	auto startY = diwstrt >> 8;
+	auto stopY = ((~diwstop >> 7) & 0x0100) | (diwstop >> 8);
+
+	ImGui::PushItemWidth(64);
+	ImGui::InputInt("X Start", &startX, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
+	ImGui::InputInt("X Stop", &stopX, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
+	ImGui::PopItemWidth();
+
+	ImGui::NextColumn();
+
+	ImGui::PushItemWidth(64);
+	ImGui::InputInt("Y Start", &startY, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
+	ImGui::InputInt("Y Stop", &stopY, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
+	ImGui::PopItemWidth();
+
+	ImGui::Columns(1);
+	ImGui::Separator();
+	ImGui::Columns(2, 0, false);
+
+	const int ddfstrt = m_amiga->PeekRegister(am::Register::DDFSTRT);
+	const int ddfstop = m_amiga->PeekRegister(am::Register::DDFSTOP);
+	const int bpl1mod = m_amiga->PeekRegister(am::Register::BPL1MOD);
+	const int bpl2mod = m_amiga->PeekRegister(am::Register::BPL2MOD);
+
+	ImGui::Text("DDFSTRT : %.2X", ddfstrt);
+	ImGui::Text("BPL1MOD : %.2X", bpl1mod);
+	ImGui::NextColumn();
+	ImGui::Text("DDFSTOP : %.2X", ddfstop);
+	ImGui::Text("BPL2MOD : %.2X", bpl2mod);
 
 	ImGui::Columns(1);
 }
