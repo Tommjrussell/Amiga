@@ -19,6 +19,13 @@ namespace guru
 	class MemoryEditor;
 	class DiskManager;
 
+	struct JoystickState
+	{
+		int x;
+		int y;
+		bool button[12];
+	};
+
 	class AmigaApp
 	{
 	public:
@@ -33,7 +40,24 @@ namespace guru
 		bool Update();
 		void Render();
 
-		bool UseCrtEmulation() const { return m_useCrtEmulation; }
+		bool UseCrtEmulation() const
+		{
+			return m_useCrtEmulation;
+		}
+
+		void SetKey(int key, int action, int mods);
+		void SetMouseButton(int button, int action, int mods);
+		void SetMouseMove(double xMove, double yMove);
+
+		void SetJoystickState(const JoystickState& state)
+		{
+			m_joystickState = state;
+		}
+
+		bool AmigaHasFocus() const
+		{
+			return m_inputMode == InputMode::EmulatorHasFocus;
+		}
 
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
@@ -54,5 +78,16 @@ namespace guru
 		std::unique_ptr<CCDebugger> m_ccDebugger;
 		std::unique_ptr<MemoryEditor> m_memoryEditor;
 		std::unique_ptr<DiskManager> m_diskManager;
+
+		enum class InputMode
+		{
+			EmulatorHasFocus,
+			GuiHasFocus,
+		};
+
+		InputMode m_inputMode = InputMode::GuiHasFocus;
+
+		JoystickState m_joystickState = {};
+		JoystickState m_oldJoystickState = {};
 	};
 }

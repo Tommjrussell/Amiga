@@ -580,6 +580,24 @@ uint8_t am::Amiga::ReadBusByte(uint32_t addr)
 				return ReadCIA(1, port);
 			}
 		}
+		else if (type == Mapped::ChipRegisters)
+		{
+			if ((addr & 0x03f000) == 0x03f000)
+			{
+				const auto regNum = addr & 0x000fff;
+				uint16_t wordread = ReadRegister(regNum);
+				if (addr & 0x1)
+				{
+					// Return least significant byte
+					return uint8_t(wordread & 0xff);
+				}
+				else
+				{
+					// Return most significant byte
+					return uint8_t(wordread >> 8);
+				}
+			}
+		}
 
 		// TODO : implement register/peripheral access
 		return 0;
@@ -894,8 +912,10 @@ void am::Amiga::Reset()
 
 	m_timerCountdown = 3; // random init value
 
-	// Enable ROM overlay
-	m_cia[0].pra |= 0x01;
+	// Enable ROM overlay (bit 0)
+	// Start with CHNG flag (bit 2) low (disk not present)
+	// All other bits held high (inactive)
+	m_cia[0].pra |= 0b1111'1011;
 	m_romOverlayEnabled = true;
 
 	m_sharedBusRws = 0;
@@ -1238,6 +1258,60 @@ void am::Amiga::TickCIATimers()
 			SetCIAInterrupt(m_cia[i], 0x02);
 		}
 	}
+}
+
+void am::Amiga::SetControllerButton(int controller, int button, bool pressed)
+{
+	switch (button)
+	{
+
+	case 0: // left mouse button / fire 1
+	{
+		uint8_t bit = 1u << ((controller == 0) ? 6 : 7);
+
+		if (pressed)
+		{
+			m_cia[0].pra &= ~bit;
+		}
+		else
+		{
+			m_cia[0].pra |= bit;
+		}
+	}	break;
+
+	case 1: // right mouse button / fire 2
+		// TODO
+		break;
+
+	case 2: // middle mouse button / fire 3?
+		// TODO
+		break;
+
+	default:
+		break;
+	}
+}
+
+void am::Amiga::SetJoystickMove(int x, int y)
+{
+	auto& joy1dat = Reg(Register::JOY1DAT);
+
+	const bool left = (x != -1);
+	const bool right = (x != 1);
+	const bool up = (y != -1);
+	const bool down = (y != 1);
+
+	joy1dat = 0;
+
+	if (!right)
+		joy1dat |= 0x0002;
+	if (right ^ down)
+		joy1dat |= 0x0001;
+
+	if (!left)
+		joy1dat |= 0x0200;
+	if (left ^ up)
+		joy1dat |= 0x0100;
 }
 
 uint16_t am::Amiga::PeekRegister(am::Register r) const

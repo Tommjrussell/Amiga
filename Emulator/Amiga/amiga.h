@@ -230,6 +230,9 @@ namespace am
 			return !m_floppyDisk[driveNum].fileId.empty();
 		}
 
+		void SetControllerButton(int controller, int button, bool pressed);
+		void SetJoystickMove(int x, int y);
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;

@@ -21,6 +21,8 @@
 
 namespace
 {
+	const char* const title = "Guru Amiga Emulator";
+
 
 	void error_callback(int error, const char* description)
 	{
@@ -34,7 +36,6 @@ namespace
 		-1.0f,  1.0f, 0.0f,
 		1.0f,  1.0f, 0.0f,
 	};
-
 }
 
 namespace guru
@@ -46,12 +47,19 @@ namespace guru
 
 	class Renderer
 	{
+		friend void GLFWKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+		friend void GLFWMouseKeyCallback(GLFWwindow* window, int button, int action, int mods);
+		friend void GLFWMouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
+
 	public:
+		explicit Renderer(AmigaApp* app);
 		~Renderer();
 
 		bool Init(const std::string& resDir, int width, int height);
+		void SetInputCallbacks(bool amigaHasfocus);
 		void SetScreenImage(const am::ScreenBuffer* screen);
 		void DrawScreen(int screenWidth, int screenHeight, bool useCrtEmulation, bool evenFrame, int magAmount);
+		void HandleInput();
 
 		GLFWwindow* GetWindow() { return m_window; }
 
@@ -61,6 +69,8 @@ namespace guru
 	private:
 		GLFWwindow* m_window;
 		ImGuiContext* m_imguiContext = nullptr;
+
+		AmigaApp* m_app;
 
 		GLuint m_programNoEffectID = 0;
 		GLuint m_programCrtID = 0;
@@ -73,7 +83,39 @@ namespace guru
 		int m_displayHeight = 0;
 		float m_textureUVdata[8] = {};
 		std::unique_ptr<TextureData> m_textureData;
+
+		GLFWmousebuttonfun m_savedMouseButtonCallback = nullptr;
+		GLFWcursorposfun m_savedMouseMoveCallback = nullptr;
+
+		double m_previousMouseX;
+		double m_previousMouseY;
 	};
+
+	void GLFWKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+	{
+		auto renderer = (guru::Renderer*)glfwGetWindowUserPointer(window);
+		renderer->m_app->SetKey(key, action, mods);
+	}
+
+	void GLFWMouseKeyCallback(GLFWwindow* window, int button, int action, int mods)
+	{
+		auto renderer = (guru::Renderer*)glfwGetWindowUserPointer(window);
+		renderer->m_app->SetMouseButton(button, action, mods);
+	}
+
+	void GLFWMouseMoveCallback(GLFWwindow* window, double xpos, double ypos)
+	{
+		auto renderer = (guru::Renderer*)glfwGetWindowUserPointer(window);
+		renderer->m_app->SetMouseMove(xpos - renderer->m_previousMouseX, ypos - renderer->m_previousMouseY);
+
+		renderer->m_previousMouseX = xpos;
+		renderer->m_previousMouseY = ypos;
+	}
+
+	Renderer::Renderer(AmigaApp* app)
+		: m_app(app)
+	{
+	}
 
 	Renderer::~Renderer()
 	{
@@ -107,7 +149,7 @@ namespace guru
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 
-		m_window = glfwCreateWindow(width, height, "Guru Amiga Emulator", NULL, NULL);
+		m_window = glfwCreateWindow(width, height, title, NULL, NULL);
 		if (!m_window)
 		{
 			glfwTerminate();
@@ -157,6 +199,81 @@ namespace guru
 		ImGui_ImplOpenGL3_Init(glsl_version);
 
 		return true;
+	}
+
+	void Renderer::SetInputCallbacks(bool amigaHasfocus)
+	{
+		glfwSetWindowUserPointer(m_window, this);
+
+		glfwSetKeyCallback(m_window, &GLFWKeyCallback);
+
+		if (amigaHasfocus)
+		{
+			std::string windowTitle = title;
+			windowTitle += " (Shift + F11 to release mouse)";
+
+			glfwSetWindowTitle(m_window, windowTitle.c_str());
+
+			glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+			if (glfwRawMouseMotionSupported())
+				glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+
+			m_savedMouseButtonCallback = glfwSetMouseButtonCallback(m_window, GLFWMouseKeyCallback);
+			m_savedMouseMoveCallback = glfwSetCursorPosCallback(m_window, GLFWMouseMoveCallback);
+
+			glfwGetCursorPos(m_window, &m_previousMouseX, &m_previousMouseY);
+		}
+		else
+		{
+			glfwSetWindowTitle(m_window, title);
+
+			glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+
+			if (m_savedMouseButtonCallback)
+			{
+				glfwSetMouseButtonCallback(m_window, m_savedMouseButtonCallback);
+			}
+			if (m_savedMouseMoveCallback)
+			{
+				glfwSetCursorPosCallback(m_window, m_savedMouseMoveCallback);
+			}
+		}
+	}
+
+	void Renderer::HandleInput()
+	{
+		JoystickState state = {};
+
+		int numHats;
+		auto hats = glfwGetJoystickHats(GLFW_JOYSTICK_1, &numHats);
+
+		for (int i = 0; i < numHats; i++)
+		{
+			if (hats[i] & 1)
+				state.y = -1;
+
+			if (hats[i] & 2)
+				state.x = 1;
+
+			if (hats[i] & 4)
+				state.y = 1;
+
+			if (hats[i] & 8)
+				state.x = -1;
+		}
+
+		int numButtons;
+		auto buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &numButtons);
+
+		for (int i = 0; i < 12; i++)
+		{
+			state.button[i] = (i < numButtons) ? (buttons[i] == GLFW_PRESS) : false;
+		}
+
+		m_app->SetJoystickState(state);
+
+		glfwPollEvents();
 	}
 
 	void Renderer::SetScreenImage(const am::ScreenBuffer* screen)
@@ -275,20 +392,27 @@ namespace guru
 
 	bool Run(int width, int height, const std::string& resourceDir, AmigaApp& app)
 	{
-		Renderer renderer;
+		Renderer renderer(&app);
 		if (!renderer.Init(resourceDir, width, height))
 			return false;
 
+		renderer.SetInputCallbacks(false);
+
 		bool appRunning = true;
+		bool amigaHasFocus = false;
 
 		while (appRunning && glfwWindowShouldClose(renderer.GetWindow()) == 0)
 		{
-			renderer.SetScreenImage(app.GetScreen());
-
-			glfwPollEvents();
+			if (amigaHasFocus != app.AmigaHasFocus())
+			{
+				amigaHasFocus = app.AmigaHasFocus();
+				renderer.SetInputCallbacks(amigaHasFocus);
+			}
+			renderer.HandleInput();
 
 			appRunning = app.Update();
 
+			renderer.SetScreenImage(app.GetScreen());
 			renderer.NewFrame();
 			app.Render();
 			renderer.Render(app.UseCrtEmulation());

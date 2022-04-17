@@ -16,6 +16,31 @@ namespace
 {
 	constexpr int PAL_CClockFreq = 3546895;
 	constexpr int NTSC_CClockFreq = 3579545;
+
+	// Replicate some GLFW input constants here...
+	constexpr int GLFW_RELEASE = 0;
+	constexpr int GLFW_PRESS = 1;
+	constexpr int GLFW_REPEAT = 2;
+
+	constexpr int GLFW_MOD_SHIFT = 0x0001;
+	constexpr int GLFW_MOD_CONTROL = 0x0002;
+	constexpr int GLFW_MOD_ALT = 0x0004;
+	constexpr int GLFW_MOD_SUPER = 0x0008;
+	constexpr int GLFW_MOD_CAPS_LOCK = 0x0010;
+	constexpr int GLFW_MOD_NUM_LOCK = 0x0020;
+
+	constexpr int GLFW_KEY_F1 = 290;
+	constexpr int GLFW_KEY_F2 = 291;
+	constexpr int GLFW_KEY_F3 = 292;
+	constexpr int GLFW_KEY_F4 = 293;
+	constexpr int GLFW_KEY_F5 = 294;
+	constexpr int GLFW_KEY_F6 = 295;
+	constexpr int GLFW_KEY_F7 = 296;
+	constexpr int GLFW_KEY_F8 = 297;
+	constexpr int GLFW_KEY_F9 = 298;
+	constexpr int GLFW_KEY_F10 = 299;
+	constexpr int GLFW_KEY_F11 = 300;
+	constexpr int GLFW_KEY_F12 = 301;
 }
 
 guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
@@ -59,6 +84,18 @@ bool guru::AmigaApp::Update()
 	}
 	else if (m_isRunning)
 	{
+		for (int b = 0; b < 3; b++)
+		{
+			if (m_joystickState.button[b] != m_oldJoystickState.button[b])
+			{
+				m_amiga->SetControllerButton(1, b, m_joystickState.button[b]);
+			}
+		}
+
+		m_amiga->SetJoystickMove(m_joystickState.x, m_joystickState.y);
+
+		m_joystickState = m_oldJoystickState;
+
 		auto now = std::chrono::high_resolution_clock::now();
 
 		std::chrono::duration<double> diff = now - m_last;
@@ -76,6 +113,9 @@ bool guru::AmigaApp::Update()
 
 void guru::AmigaApp::Render()
 {
+	if (m_inputMode == InputMode::EmulatorHasFocus)
+		return;
+
 	//ImGui::ShowDemoWindow();
 
 	if (ImGui::BeginMainMenuBar())
@@ -214,4 +254,45 @@ std::vector<uint8_t> guru::AmigaApp::LoadRom(const std::string& romFile) const
 const am::ScreenBuffer* guru::AmigaApp::GetScreen() const
 {
 	return m_amiga->GetScreen();
+}
+
+void guru::AmigaApp::SetKey(int key, int action, int mods)
+{
+	if (action == GLFW_PRESS && (mods & GLFW_MOD_SHIFT) != 0 && key == GLFW_KEY_F11)
+	{
+		// shift + F11 toggles between sending input to the Amiga or to the emulator GUI
+		m_inputMode = (m_inputMode == InputMode::GuiHasFocus) ? InputMode::EmulatorHasFocus : InputMode::GuiHasFocus;
+		return;
+	}
+
+	if (m_inputMode == InputMode::GuiHasFocus)
+	{
+		if (action == GLFW_PRESS && key == GLFW_KEY_F5)
+		{
+			SetRunning(!m_isRunning);
+			return;
+		}
+	}
+	else
+	{
+		// TODO : pass keyboard input to emulator
+	}
+}
+
+void guru::AmigaApp::SetMouseButton(int button, int action, int mods)
+{
+	// Unlike the key callback, this is only called in emulator mode. Feed mouse buttons to emulator
+
+	if (!(action == GLFW_PRESS || action == GLFW_RELEASE))
+		return;
+
+	if (button < 0 || button > 2)
+		return;
+
+	m_amiga->SetControllerButton(0, button, (action == GLFW_PRESS));
+}
+
+void guru::AmigaApp::SetMouseMove(double xMove, double yMove)
+{
+	// TODO
 }
