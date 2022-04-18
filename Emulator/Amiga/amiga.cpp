@@ -2458,8 +2458,10 @@ void am::Amiga::ProcessDriveCommands(uint8_t data)
 
 			if (directionInwards)
 			{
-				if (drive.currCylinder < 80)
+				if ((drive.currCylinder + 1) < kCylindersPerDisk)
+				{
 					drive.currCylinder++;
+				}
 			}
 			else
 			{
