@@ -6,6 +6,12 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <map>
+
+namespace util
+{
+	enum class Key : int;
+}
 
 namespace am
 {
@@ -61,6 +67,7 @@ namespace guru
 
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
+		void ConvertAndSendKeyCode(util::Key key, bool down);
 
 	private:
 		bool m_isQuitting = false;
@@ -89,5 +96,7 @@ namespace guru
 
 		JoystickState m_joystickState = {};
 		JoystickState m_oldJoystickState = {};
+
+		std::map<util::Key, uint8_t> m_keyMap;
 	};
 }

@@ -784,6 +784,16 @@ void am::Amiga::DoOneTick()
 		m_timerCountdown = 5;
 	}
 
+	// Update Keyboard
+	if (m_keyCooldown > 0)
+	{
+		m_keyCooldown--;
+	}
+	else if (m_keyQueueBack != m_keyQueueFront)
+	{
+		TransmitKeyCode();
+	}
+
 	// Update Floppy
 	if (m_driveSelected != -1 && IsDiskInserted(m_driveSelected))
 	{
@@ -938,6 +948,10 @@ void am::Amiga::Reset()
 	m_diskDma = {};
 
 	m_m68000->Reset(m_cpuBusyTimer);
+
+	m_keyQueueFront = 0;
+	m_keyQueueBack = 0;
+	m_keyCooldown = 0;
 }
 
 void am::Amiga::WriteCIA(int num, int port, uint8_t data)
@@ -1193,6 +1207,12 @@ uint8_t am::Amiga::ReadCIA(int num, int port)
 		return uint8_t((cia.todLatched & 0x00ff0000) >> 16);
 	}
 
+	case 0xc:
+	{
+		// serial data register (keyboard input on CIAA)
+		return cia.sdr;
+	}
+
 	case 0xd:
 	{
 		uint8_t irqs = cia.irqData;
@@ -1312,6 +1332,23 @@ void am::Amiga::SetJoystickMove(int x, int y)
 		joy1dat |= 0x0200;
 	if (left ^ up)
 		joy1dat |= 0x0100;
+}
+
+void am::Amiga::QueueKeyPress(uint8_t keycode)
+{
+	if ((m_keyQueueBack + 1) % kKeyQueueSize == m_keyQueueFront)
+		return; // key buffer full
+
+	m_keyQueue[m_keyQueueBack] = ~((keycode << 1) | ((keycode & 0x80) >> 7));
+	m_keyQueueBack = (m_keyQueueBack + 1) % kKeyQueueSize;
+}
+
+void am::Amiga::TransmitKeyCode()
+{
+	m_cia[0].sdr = m_keyQueue[m_keyQueueFront];
+	m_keyQueueFront = (m_keyQueueFront + 1) % kKeyQueueSize;
+	SetCIAInterrupt(m_cia[0], 0x08);
+	m_keyCooldown = 1715;
 }
 
 uint16_t am::Amiga::PeekRegister(am::Register r) const

@@ -56,6 +56,7 @@ namespace am
 		uint8_t prb = 0;
 		uint8_t ddra = 0;
 		uint8_t ddrb = 0;
+		uint8_t sdr = 0;
 
 		uint8_t irqData = 0;
 		uint8_t irqMask = 0;
@@ -233,6 +234,8 @@ namespace am
 		void SetControllerButton(int controller, int button, bool pressed);
 		void SetJoystickMove(int x, int y);
 
+		void QueueKeyPress(uint8_t keycode);
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;
@@ -304,6 +307,8 @@ namespace am
 		void UpdateFloppyDriveFlags();
 		void StartDiskDMA();
 		void DoDiskDMA();
+
+		void TransmitKeyCode();
 
 	private:
 		std::vector<uint8_t> m_rom;
@@ -389,6 +394,13 @@ namespace am
 		int m_diskRotationCountdown; // Countdown to next full disk rotation.
 
 		DiskDma m_diskDma;
+
+		// Keyboard
+		static constexpr int kKeyQueueSize = 32;
+		std::array<uint8_t, kKeyQueueSize> m_keyQueue;
+		int m_keyQueueFront;
+		int m_keyQueueBack;
+		int m_keyCooldown;
 	};
 
 }

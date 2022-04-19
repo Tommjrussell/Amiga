@@ -7,6 +7,7 @@
 #include "disk_manager.h"
 
 #include "util/file.h"
+#include "util/key_codes.h"
 
 #include <imgui.h>
 #include <memory>
@@ -29,18 +30,113 @@ namespace
 	constexpr int GLFW_MOD_CAPS_LOCK = 0x0010;
 	constexpr int GLFW_MOD_NUM_LOCK = 0x0020;
 
-	constexpr int GLFW_KEY_F1 = 290;
-	constexpr int GLFW_KEY_F2 = 291;
-	constexpr int GLFW_KEY_F3 = 292;
-	constexpr int GLFW_KEY_F4 = 293;
-	constexpr int GLFW_KEY_F5 = 294;
-	constexpr int GLFW_KEY_F6 = 295;
-	constexpr int GLFW_KEY_F7 = 296;
-	constexpr int GLFW_KEY_F8 = 297;
-	constexpr int GLFW_KEY_F9 = 298;
-	constexpr int GLFW_KEY_F10 = 299;
-	constexpr int GLFW_KEY_F11 = 300;
-	constexpr int GLFW_KEY_F12 = 301;
+	using util::Key;
+
+	struct AmigaKeyMap
+	{
+		Key key;
+		uint8_t amigaKeycode;
+	};
+
+	const AmigaKeyMap kStandardKeyMapping[] =
+	{
+		{ Key::KEY_SPACE,         0x40 },
+		{ Key::KEY_APOSTROPHE,    0x2a },
+		{ Key::KEY_COMMA,         0x38 },
+		{ Key::KEY_MINUS,         0x0b },
+		{ Key::KEY_PERIOD,        0x39 },
+		{ Key::KEY_SLASH,         0x3a },
+		{ Key::KEY_0,             0x0a },
+		{ Key::KEY_1,             0x01 },
+		{ Key::KEY_2,             0x02 },
+		{ Key::KEY_3,             0x03 },
+		{ Key::KEY_4,             0x04 },
+		{ Key::KEY_5,             0x05 },
+		{ Key::KEY_6,             0x06 },
+		{ Key::KEY_7,             0x07 },
+		{ Key::KEY_8,             0x08 },
+		{ Key::KEY_9,             0x09 },
+		{ Key::KEY_SEMICOLON,     0x29 },
+		{ Key::KEY_EQUAL,         0x0c },
+		{ Key::KEY_A,             0x20 },
+		{ Key::KEY_B,             0x35 },
+		{ Key::KEY_C,             0x33 },
+		{ Key::KEY_D,             0x22 },
+		{ Key::KEY_E,             0x12 },
+		{ Key::KEY_F,             0x23 },
+		{ Key::KEY_G,             0x24 },
+		{ Key::KEY_H,             0x25 },
+		{ Key::KEY_I,             0x17 },
+		{ Key::KEY_J,             0x26 },
+		{ Key::KEY_K,             0x27 },
+		{ Key::KEY_L,             0x28 },
+		{ Key::KEY_M,             0x37 },
+		{ Key::KEY_N,             0x36 },
+		{ Key::KEY_O,             0x18 },
+		{ Key::KEY_P,             0x19 },
+		{ Key::KEY_Q,             0x10 },
+		{ Key::KEY_R,             0x13 },
+		{ Key::KEY_S,             0x21 },
+		{ Key::KEY_T,             0x14 },
+		{ Key::KEY_U,             0x16 },
+		{ Key::KEY_V,             0x34 },
+		{ Key::KEY_W,             0x11 },
+		{ Key::KEY_X,             0x32 },
+		{ Key::KEY_Y,             0x15 },
+		{ Key::KEY_Z,             0x31 },
+		{ Key::KEY_LEFT_BRACKET,  0x1a },
+		{ Key::KEY_BACKSLASH,     0x0d },
+		{ Key::KEY_RIGHT_BRACKET, 0x1b },
+		{ Key::KEY_GRAVE_ACCENT,  0x00 },
+
+		/* Function keys */
+		{ Key::KEY_ESCAPE,        0x45 },
+		{ Key::KEY_ENTER,         0x44 },
+		{ Key::KEY_TAB,           0x42 },
+		{ Key::KEY_BACKSPACE,     0x41 },
+		{ Key::KEY_DELETE,        0x46 },
+		{ Key::KEY_RIGHT,         0x4e },
+		{ Key::KEY_LEFT,          0x4f },
+		{ Key::KEY_DOWN,          0x4d },
+		{ Key::KEY_UP,            0x4c },
+		{ Key::KEY_HOME,          0x5f },  // Note: Home key mapped to Amiga's 'Help' key
+		{ Key::KEY_CAPS_LOCK,     0x62 },
+		{ Key::KEY_F1,            0x50 },
+		{ Key::KEY_F2,            0x51 },
+		{ Key::KEY_F3,            0x52 },
+		{ Key::KEY_F4,            0x53 },
+		{ Key::KEY_F5,            0x54 },
+		{ Key::KEY_F6,            0x55 },
+		{ Key::KEY_F7,            0x56 },
+		{ Key::KEY_F8,            0x57 },
+		{ Key::KEY_F9,            0x58 },
+		{ Key::KEY_F10,           0x59 },
+		{ Key::KEY_KP_0,          0x0f },
+		{ Key::KEY_KP_1,          0x1d },
+		{ Key::KEY_KP_2,          0x1e },
+		{ Key::KEY_KP_3,          0x1f },
+		{ Key::KEY_KP_4,          0x2d },
+		{ Key::KEY_KP_5,          0x2e },
+		{ Key::KEY_KP_6,          0x2f },
+		{ Key::KEY_KP_7,          0x3d },
+		{ Key::KEY_KP_8,          0x3e },
+		{ Key::KEY_KP_9,          0x3f },
+		{ Key::KEY_KP_DECIMAL,    0x3c },
+		{ Key::KEY_KP_DIVIDE,     0x5c },
+		{ Key::KEY_KP_MULTIPLY,   0x5d },
+		{ Key::KEY_KP_SUBTRACT,   0x4a },
+		{ Key::KEY_KP_ADD,        0x5e },
+		{ Key::KEY_KP_ENTER,      0x43 },
+		{ Key::KEY_LEFT_SHIFT,    0x60 },
+		{ Key::KEY_LEFT_CONTROL,  0x63 },
+		{ Key::KEY_LEFT_ALT,      0x64 },
+		{ Key::KEY_LEFT_SUPER,    0x66 },
+		{ Key::KEY_RIGHT_SHIFT,   0x61 },
+		{ Key::KEY_RIGHT_CONTROL, 0x63 },
+		{ Key::KEY_RIGHT_ALT,     0x64 },
+		{ Key::KEY_RIGHT_SUPER,   0x67 },
+	};
+
 }
 
 guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
@@ -55,6 +151,11 @@ guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
 
 	m_debugger = std::make_unique<Debugger>(this, m_amiga.get());
 	m_ccDebugger = std::make_unique<CCDebugger>(this, m_amiga.get());
+
+	for (int i = 0; i < _countof(kStandardKeyMapping); i++)
+	{
+		m_keyMap[kStandardKeyMapping[i].key] = kStandardKeyMapping[i].amigaKeycode;
+	}
 }
 
 guru::AmigaApp::~AmigaApp()
@@ -258,7 +359,9 @@ const am::ScreenBuffer* guru::AmigaApp::GetScreen() const
 
 void guru::AmigaApp::SetKey(int key, int action, int mods)
 {
-	if (action == GLFW_PRESS && (mods & GLFW_MOD_SHIFT) != 0 && key == GLFW_KEY_F11)
+	using util::Key;
+
+	if (action == GLFW_PRESS && (mods & GLFW_MOD_SHIFT) != 0 && Key(key) == Key::KEY_F11)
 	{
 		// shift + F11 toggles between sending input to the Amiga or to the emulator GUI
 		m_inputMode = (m_inputMode == InputMode::GuiHasFocus) ? InputMode::EmulatorHasFocus : InputMode::GuiHasFocus;
@@ -267,7 +370,7 @@ void guru::AmigaApp::SetKey(int key, int action, int mods)
 
 	if (m_inputMode == InputMode::GuiHasFocus)
 	{
-		if (action == GLFW_PRESS && key == GLFW_KEY_F5)
+		if (action == GLFW_PRESS && Key(key) == Key::KEY_F5)
 		{
 			SetRunning(!m_isRunning);
 			return;
@@ -275,7 +378,10 @@ void guru::AmigaApp::SetKey(int key, int action, int mods)
 	}
 	else
 	{
-		// TODO : pass keyboard input to emulator
+		if (action == GLFW_PRESS || action == GLFW_RELEASE)
+		{
+			ConvertAndSendKeyCode(Key(key), action == GLFW_PRESS);
+		}
 	}
 }
 
@@ -295,4 +401,16 @@ void guru::AmigaApp::SetMouseButton(int button, int action, int mods)
 void guru::AmigaApp::SetMouseMove(double xMove, double yMove)
 {
 	// TODO
+}
+
+void guru::AmigaApp::ConvertAndSendKeyCode(util::Key key, bool down)
+{
+	if (!m_isRunning && down == true)
+		return; // do not queue new key presses while the emulator is paused
+
+	auto it = m_keyMap.find(key);
+	if (it == m_keyMap.end())
+		return;
+
+	m_amiga->QueueKeyPress(it->second + (down ? 0 : 0x80));
 }
