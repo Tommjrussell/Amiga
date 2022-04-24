@@ -70,6 +70,8 @@ namespace guru
 		GLFWwindow* m_window;
 		ImGuiContext* m_imguiContext = nullptr;
 
+		GLFWkeyfun m_imguiKeyCallback = nullptr;
+
 		AmigaApp* m_app;
 
 		GLuint m_programNoEffectID = 0;
@@ -94,7 +96,10 @@ namespace guru
 	void GLFWKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 	{
 		auto renderer = (guru::Renderer*)glfwGetWindowUserPointer(window);
-		renderer->m_app->SetKey(key, action, mods);
+		if (!renderer->m_app->SetKey(key, action, mods))
+		{
+			renderer->m_imguiKeyCallback(window, key, scancode, action, mods);
+		}
 	}
 
 	void GLFWMouseKeyCallback(GLFWwindow* window, int button, int action, int mods)
@@ -205,7 +210,7 @@ namespace guru
 	{
 		glfwSetWindowUserPointer(m_window, this);
 
-		glfwSetKeyCallback(m_window, &GLFWKeyCallback);
+		m_imguiKeyCallback = glfwSetKeyCallback(m_window, &GLFWKeyCallback);
 
 		if (amigaHasfocus)
 		{

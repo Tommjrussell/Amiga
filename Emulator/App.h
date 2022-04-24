@@ -51,7 +51,7 @@ namespace guru
 			return m_useCrtEmulation;
 		}
 
-		void SetKey(int key, int action, int mods);
+		bool SetKey(int key, int action, int mods);
 		void SetMouseButton(int button, int action, int mods);
 		void SetMouseMove(double xMove, double yMove);
 

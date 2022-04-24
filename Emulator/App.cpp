@@ -357,7 +357,7 @@ const am::ScreenBuffer* guru::AmigaApp::GetScreen() const
 	return m_amiga->GetScreen();
 }
 
-void guru::AmigaApp::SetKey(int key, int action, int mods)
+bool guru::AmigaApp::SetKey(int key, int action, int mods)
 {
 	using util::Key;
 
@@ -365,15 +365,18 @@ void guru::AmigaApp::SetKey(int key, int action, int mods)
 	{
 		// shift + F11 toggles between sending input to the Amiga or to the emulator GUI
 		m_inputMode = (m_inputMode == InputMode::GuiHasFocus) ? InputMode::EmulatorHasFocus : InputMode::GuiHasFocus;
-		return;
+		return true;
 	}
 
 	if (m_inputMode == InputMode::GuiHasFocus)
 	{
-		if (action == GLFW_PRESS && Key(key) == Key::KEY_F5)
+		if (Key(key) == Key::KEY_F5)
 		{
-			SetRunning(!m_isRunning);
-			return;
+			if (action == GLFW_PRESS)
+			{
+				SetRunning(!m_isRunning);
+			}
+			return true;
 		}
 	}
 	else
@@ -382,7 +385,10 @@ void guru::AmigaApp::SetKey(int key, int action, int mods)
 		{
 			ConvertAndSendKeyCode(Key(key), action == GLFW_PRESS);
 		}
+		return true;
 	}
+
+	return false; // not handled
 }
 
 void guru::AmigaApp::SetMouseButton(int button, int action, int mods)
