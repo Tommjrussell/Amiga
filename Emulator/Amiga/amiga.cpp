@@ -1926,10 +1926,11 @@ void am::Amiga::UpdateScreen()
 
 	auto bufferLine = line - 36;
 
-	if (xPos < 0)
+	if (xPos < -0x1c)
 	{
 		xPos += kPAL_lineLength;
 		bufferLine--;
+		line--;
 	}
 	else if (xPos == 0 && bufferLine == (m_isNtsc ? 216 : 272))
 	{
@@ -1938,7 +1939,7 @@ void am::Amiga::UpdateScreen()
 		return;
 	}
 
-	if (bufferLine < 0 || bufferLine >= (m_isNtsc ? 216 : 272) || xPos >= 0xa8)
+	if (bufferLine < 0 || bufferLine >= (m_isNtsc ? 216 : 272))
 		return;
 
 	if (line >= m_windowStartY && line < m_windowStopY)
@@ -1947,21 +1948,25 @@ void am::Amiga::UpdateScreen()
 		auto endIndex = m_windowStopX - 0x79;
 
 		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
-		const auto loresPixelPos = xPos * 2;
 
 		if (m_bitplane.hires)
 		{
 			for (int x = 0; x < 4; x++)
 			{
-				if ((loresPixelPos + x / 2) >= startIndex && (loresPixelPos + x / 2) < endIndex)
-				{
-					auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask];
+				int loresPixelPos = (xPos * 2 + x / 2);
 
-					(*m_currentScreen.get())[index++] = m_palette[value];
-				}
-				else
+				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
-					(*m_currentScreen.get())[index++] = m_palette[0];
+					if (loresPixelPos >= startIndex && loresPixelPos < endIndex)
+					{
+						auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask];
+
+						(*m_currentScreen.get())[index++] = m_palette[value];
+					}
+					else
+					{
+						(*m_currentScreen.get())[index++] = m_palette[0];
+					}
 				}
 				m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask] = 0;
 			}
@@ -1971,29 +1976,38 @@ void am::Amiga::UpdateScreen()
 		{
 			for (int x = 0; x < 2; x++)
 			{
-				if ((loresPixelPos + x) >= startIndex && (loresPixelPos + x) < endIndex)
-				{
-					auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask];
+				int loresPixelPos = (xPos * 2 + x);
 
-					(*m_currentScreen.get())[index++] = m_palette[value];
-					(*m_currentScreen.get())[index++] = m_palette[value];
-				}
-				else
+				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
-					(*m_currentScreen.get())[index++] = m_palette[0];
-					(*m_currentScreen.get())[index++] = m_palette[0];
+					if (loresPixelPos >= startIndex && loresPixelPos < endIndex)
+					{
+						auto value = m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask];
+
+						(*m_currentScreen.get())[index++] = m_palette[value];
+						(*m_currentScreen.get())[index++] = m_palette[value];
+					}
+					else
+					{
+						(*m_currentScreen.get())[index++] = m_palette[0];
+						(*m_currentScreen.get())[index++] = m_palette[0];
+					}
 				}
 				m_pixelBuffer[(m_pixelBufferReadPtr + x) & kPixelBufferMask] = 0;
+
 			}
 			m_pixelBufferReadPtr += 2;
 		}
 	}
 	else
 	{
-		for (int x = 0; x < 4; x++)
+		if (xPos >= 0 && xPos < 0xa8)
 		{
-			auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
-			(*m_currentScreen.get())[index + x] = m_palette[0];
+			for (int x = 0; x < 4; x++)
+			{
+				auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
+				(*m_currentScreen.get())[index + x] = m_palette[0];
+			}
 		}
 	}
 }
