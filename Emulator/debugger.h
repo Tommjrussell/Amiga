@@ -44,6 +44,7 @@ namespace guru
 		struct DisassemblyLine
 		{
 			uint32_t addr;
+			int visited;
 			std::string text;
 		};
 

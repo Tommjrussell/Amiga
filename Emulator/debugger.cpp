@@ -149,7 +149,30 @@ bool guru::Debugger::Draw()
 				}
 				else
 				{
+					// Colour gets progressively more yellow as number of recent visits increases
+					static const ImU32 visitedColours[] =
+					{
+						IM_COL32(0, 255, 0, 255),
+						IM_COL32(31, 255, 0, 255),
+						IM_COL32(63, 255, 0, 255),
+						IM_COL32(95, 255, 0, 255),
+						IM_COL32(127, 255, 0, 255),
+						IM_COL32(159, 255, 0, 255),
+						IM_COL32(191, 255, 0, 255),
+						IM_COL32(223, 255, 0, 255),
+						IM_COL32(255, 255, 0, 255),
+					};
+
+					if (d.visited > 0)
+					{
+						ImGui::PushStyleColor(ImGuiCol_Text, visitedColours[std::min(8, d.visited-1)]);
+					}
 					ImGui::Text(d.text.c_str());
+
+					if (d.visited > 0)
+					{
+						ImGui::PopStyleColor();
+					}
 				}
 			}
 		}
@@ -170,10 +193,10 @@ void guru::Debugger::UpdateAssembly()
 	auto cpu = m_amiga->GetCpu();
 	auto pc = cpu->GetPC();
 
+	auto [history, ptr] = cpu->GetOperationHistory();
+
 	if (m_trackPc)
 	{
-		auto[history, ptr] = cpu->GetOperationHistory();
-
 		uint32_t earliestAddr = pc;
 
 		// Look for the earliest recently previously-executed instruction that
@@ -212,10 +235,18 @@ void guru::Debugger::UpdateAssembly()
 		}
 
 		const uint32_t addr = m_disassembler->pc;
+
+		int visited = 0;
+		for (auto ad : *history)
+		{
+			if (ad == addr)
+				visited++;
+		}
+
 		std::string line = util::HexToString(addr);
 		line += onPc ? " > " : " : ";
 		line += m_disassembler->Disassemble();
-		m_disassembly.emplace_back(DisassemblyLine{addr, line});
+		m_disassembly.emplace_back(DisassemblyLine{addr, visited, line});
 	}
 }
 
