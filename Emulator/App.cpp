@@ -241,7 +241,7 @@ void guru::AmigaApp::Render()
 	{
 		if (ImGui::BeginMenu("Main"))
 		{
-			if (ImGui::MenuItem("Debugger", ""))
+			if (ImGui::MenuItem("Debugger", "F1"))
 			{
 				m_debuggerOpen = true;
 			}
@@ -388,7 +388,15 @@ bool guru::AmigaApp::SetKey(int key, int action, int mods)
 
 	if (m_inputMode == InputMode::GuiHasFocus)
 	{
-		if (Key(key) == Key::KEY_F5)
+		if (Key(key) == Key::KEY_F1)
+		{
+			if (action == GLFW_PRESS)
+			{
+				m_debuggerOpen = !m_debuggerOpen;
+			}
+			return true;
+		}
+		else if (Key(key) == Key::KEY_F5)
 		{
 			if (action == GLFW_PRESS)
 			{

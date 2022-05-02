@@ -414,8 +414,14 @@ void guru::Debugger::DrawControls()
 			if ((*history)[ptr] == 0xffffffff)
 				break;
 
-			ImGui::Text("%08x", (*history)[ptr]);
-
+			char oldAddr[64];
+			sprintf_s(oldAddr, "%08x##history%d", (*history)[ptr], ptr);
+			if (ImGui::Selectable(oldAddr, false))
+			{
+				m_trackPc = 0;
+				m_disassemblyStart = (*history)[ptr];
+				m_disassembly.clear();
+			}
 		}
 		ImGui::EndPopup();
 	}
