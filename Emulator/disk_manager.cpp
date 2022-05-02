@@ -1,17 +1,16 @@
 #include "disk_manager.h"
 
-
-#include "util/strings.h"
-#include "util/file.h"
-#include "util/imgui_extras.h"
-#include "util/scope_guard.h"
+#include "disk_image.h"
 
 #include "amiga/amiga.h"
+
+#include "util/imgui_extras.h"
 
 #include <imgui.h>
 #include "3rd Party/imfilebrowser.h"
 
-#include "minizip/unzip.h"
+#include <vector>
+#include <string>
 
 guru::DiskManager::DiskManager(am::Amiga* amiga)
 	: m_amiga(amiga)
@@ -91,92 +90,19 @@ bool guru::DiskManager::Draw()
 
 	if (m_fileDialog->HasSelected())
 	{
-		auto path = m_fileDialog->GetSelected();
-		auto name = path.filename().generic_u8string();
-
 		std::vector<uint8_t> image;
+		std::string name;
 
-		bool isGood = false;
+		bool ok = LoadDiskImage(m_fileDialog->GetSelected(), image, name);
 
-		if (util::ToUpper(path.extension().string()) == ".ZIP")
-		{
-			std::string zippedFile;
-			isGood = LoadZippedImage(path.string(), image, zippedFile);
+		m_loadFailed[m_selectedDrive] = !ok;
 
-			name += "::";
-			name += zippedFile;
-		}
-		else
-		{
-			isGood = util::LoadBinaryFile(path.string(), image);
-		}
-
-		m_loadFailed[m_selectedDrive] = !isGood;
-
-		if (isGood)
+		if (ok)
 		{
 			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, name, std::move(image));
 		}
 
 		m_fileDialog->ClearSelected();
-	}
-
-	return true;
-}
-
-bool guru::DiskManager::LoadZippedImage(const std::string& zipFilename, std::vector<uint8_t>& image, std::string& adfName)
-{
-	unzFile zipfile = unzOpen(zipFilename.c_str());
-	if (!zipfile)
-		return false;
-
-	auto zipguard = util::make_scope_guard([&]()
-		{
-			unzClose(zipfile);
-		});
-
-	if (unzGoToFirstFile(zipfile) != UNZ_OK)
-		return false;
-
-	char filename[512];
-
-	for (;;)
-	{
-		unz_file_info file_info;
-		if (unzGetCurrentFileInfo(
-			zipfile,
-			&file_info,
-			filename,
-			_countof(filename),
-			NULL, 0, NULL, 0) != UNZ_OK)
-		{
-			return false;
-		}
-
-		std::string file = filename;
-		if (util::EndsWith(util::ToUpper(file), ".ADF"))
-		{
-			if (unzOpenCurrentFile(zipfile) != UNZ_OK)
-				return false;
-
-			auto fileguard = util::make_scope_guard([&]()
-				{
-					unzCloseCurrentFile(zipfile);
-				});
-
-			image.resize(file_info.uncompressed_size);
-
-			const auto numBytes = unzReadCurrentFile(zipfile, image.data(), file_info.uncompressed_size);
-
-			if (numBytes != file_info.uncompressed_size)
-				return false;
-
-			adfName = file;
-			break;
-		}
-
-		if (unzGoToNextFile(zipfile) != UNZ_OK)
-			break;
 	}
 
 	return true;

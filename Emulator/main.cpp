@@ -8,17 +8,20 @@ int main(int argc, char** argv)
 {
 	std::string resDir = ".";
 	std::string romFile;
+	std::string df0;
 
 	cxxopts::Options options("guru", "Guru Amiga Emulator");
 	options.add_options()
 		("r,res", "Path to resource directory", cxxopts::value<std::string>()->default_value(""))
-		("m,rom", "Path to rom file", cxxopts::value<std::string>()->default_value(""));
+		("m,rom", "Path to rom file", cxxopts::value<std::string>()->default_value(""))
+		("df0", "disk image file for drive DF0", cxxopts::value<std::string>()->default_value(""));
 
 	try
 	{
 		auto result = options.parse(argc, argv);
 		resDir = result["res"].as<std::string>();
 		romFile = result["rom"].as<std::string>();
+		df0 = result["df0"].as<std::string>();
 	}
 	catch (cxxopts::OptionParseException& e)
 	{
@@ -28,5 +31,11 @@ int main(int argc, char** argv)
 	}
 
 	guru::AmigaApp app(resDir, romFile);
+
+	if (!df0.empty())
+	{
+		app.SetDiskImage(0, df0);
+	}
+
 	return guru::Run(1024, 768, resDir, app) ? 0 : 1;
 }

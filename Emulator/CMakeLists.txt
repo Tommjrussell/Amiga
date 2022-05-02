@@ -23,6 +23,7 @@ add_executable (AmigaEmulator
 	"custom_chips_debugger.cpp" "custom_chips_debugger.h"
 	"memory_editor.cpp" "memory_editor.h"
 	"disk_manager.h" "disk_manager.cpp"
+	"disk_image.h" "disk_image.cpp"
 	"amiga/amiga.cpp" "amiga/amiga.h"
 	"amiga/disassembler.cpp" "amiga/disassembler.h"
 	"amiga/68000.h" "amiga/68000.cpp"

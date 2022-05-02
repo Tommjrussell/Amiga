@@ -1,8 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <vector>
-#include <string>
 
 namespace ImGui
 {
@@ -23,9 +21,6 @@ namespace guru
 		~DiskManager();
 
 		bool Draw();
-
-	private:
-		bool LoadZippedImage(const std::string& file, std::vector<uint8_t>& image, std::string& adfName);
 
 	private:
 		am::Amiga* m_amiga;

@@ -5,6 +5,7 @@
 #include "custom_chips_debugger.h"
 #include "memory_editor.h"
 #include "disk_manager.h"
+#include "disk_image.h"
 
 #include "util/file.h"
 #include "util/key_codes.h"
@@ -174,6 +175,23 @@ void guru::AmigaApp::SetRunning(bool running)
 	{
 		m_debugger->OnStartRunning();
 	}
+}
+
+bool guru::AmigaApp::SetDiskImage(int drive, std::string& pathToImage)
+{
+	std::filesystem::path path(pathToImage);
+
+	std::vector<uint8_t> image;
+	std::string name;
+
+	bool ok = LoadDiskImage(path, image, name);
+
+	if (ok)
+	{
+		ok = m_amiga->SetDisk(drive, name, std::move(image));
+	}
+
+	return ok;
 }
 
 bool guru::AmigaApp::Update()
