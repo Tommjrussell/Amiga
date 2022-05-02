@@ -210,7 +210,10 @@ namespace guru
 	{
 		glfwSetWindowUserPointer(m_window, this);
 
-		m_imguiKeyCallback = glfwSetKeyCallback(m_window, &GLFWKeyCallback);
+		if (!m_imguiKeyCallback)
+		{
+			m_imguiKeyCallback = glfwSetKeyCallback(m_window, &GLFWKeyCallback);
+		}
 
 		if (amigaHasfocus)
 		{
