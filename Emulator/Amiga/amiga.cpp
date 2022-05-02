@@ -1554,6 +1554,12 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		DoInterruptRequest();
 		break;
 
+	case am::Register::ADKCON:
+	{
+		auto adkconr = UpdateFlagRegister(Register::ADKCONR, value);
+		m_diskDma.useWordSync = (adkconr & 0x0400) != 0;
+	}	break;
+
 	case am::Register::BPL1PTH:
 	case am::Register::BPL1PTL:
 	case am::Register::BPL2PTH:
