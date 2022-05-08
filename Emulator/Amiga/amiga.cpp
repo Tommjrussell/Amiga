@@ -383,6 +383,51 @@ void am::Amiga::EnableBreakOnLine(uint32_t lineNum)
 	m_breakAtLineNum = lineNum;
 }
 
+void am::Amiga::SetDataBreakpoint(uint32_t addr, uint32_t size)
+{
+	m_breakAtAddressChanged = true;
+	m_dataBreakpoint = addr;
+	m_dataBreakpointSize = size;
+
+	switch (size)
+	{
+	case 1:
+		m_currentDataBreakpointData = PeekByte(addr);
+		break;
+	case 2:
+		m_currentDataBreakpointData = PeekWord(addr);
+		break;
+	case 4:
+		m_currentDataBreakpointData = (uint32_t(PeekWord(addr)) << 16) | PeekWord(addr + 2);
+		break;
+	};
+}
+
+void am::Amiga::DisableDataBreakpoint()
+{
+	m_breakAtAddressChanged = false;
+}
+
+bool am::Amiga::DataBreakpointTriggered()
+{
+	uint32_t value = 0;
+
+	switch (m_dataBreakpointSize)
+	{
+	case 1:
+		value = PeekByte(m_dataBreakpoint);
+		break;
+	case 2:
+		value = PeekWord(m_dataBreakpoint);
+		break;
+	case 4:
+		value = (uint32_t(PeekWord(m_dataBreakpoint)) << 16) | PeekWord(m_dataBreakpoint + 2);
+		break;
+	};
+
+	return (value != m_currentDataBreakpointData);
+}
+
 uint8_t am::Amiga::PeekByte(uint32_t addr) const
 {
 	auto [type, mem] = const_cast<Amiga*>(this)->GetMappedMemory(addr);
@@ -724,6 +769,17 @@ void am::Amiga::DoOneTick()
 			m_breakAtNextInstruction = false;
 			m_running = false;
 			return;
+		}
+
+		if (m_breakAtAddressChanged)
+		{
+			if (DataBreakpointTriggered())
+			{
+				// Reset the breakpoint to record new value
+				SetDataBreakpoint(m_dataBreakpoint, m_dataBreakpointSize);
+				m_running = false;
+				return;
+			}
 		}
 
 		if (!m_m68000->DecodeOneInstruction(m_cpuBusyTimer))

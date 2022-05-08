@@ -328,7 +328,7 @@ void guru::Debugger::DrawControls()
 
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-	ImGui::BeginChild("Controls", ImVec2(0, 104), true, 0);
+	ImGui::BeginChild("Controls", ImVec2(0, 150), true, 0);
 
 	const bool running = m_app->IsRunning();
 	auto regs = m_amiga->GetCpu()->GetRegisters();
@@ -425,6 +425,39 @@ void guru::Debugger::DrawControls()
 		}
 		ImGui::EndPopup();
 	}
+
+	static const char* dataBpSizeItems[] = { "byte", "word", "long" };
+
+	if (ImGui::Checkbox("Enable Data Breakpoint", &m_dataBpEnabled))
+	{
+		if (m_dataBpEnabled)
+		{
+			m_amiga->SetDataBreakpoint(m_dataBp, 1 << m_dataBpSize);
+		}
+		else
+		{
+			m_amiga->DisableDataBreakpoint();
+		}
+	}
+	ImGui::PushItemWidth(64);
+	if (ImGui::InputInt("##DataBreakpoint", (int*)&m_dataBp, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
+	{
+		m_dataBp &= ~((1 << m_dataBpSize) - 1);
+		if (m_dataBpEnabled)
+		{
+			m_amiga->SetDataBreakpoint(m_dataBp, 1 << m_dataBpSize);
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Combo("##DataBreakpointSize", &m_dataBpSize, dataBpSizeItems, IM_ARRAYSIZE(dataBpSizeItems)))
+	{
+		m_dataBp &= ~((1 << m_dataBpSize) - 1);
+		if (m_dataBpEnabled)
+		{
+			m_amiga->SetDataBreakpoint(m_dataBp, 1 << m_dataBpSize);
+		}
+	}
+	ImGui::PopItemWidth();
 
 	ImGui::EndChild();
 	ImGui::PopStyleVar(2);

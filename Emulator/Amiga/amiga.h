@@ -207,6 +207,10 @@ namespace am
 		void DisableBreakOnRegister();
 		void EnableBreakOnLine(uint32_t lineNum);
 
+		void SetDataBreakpoint(uint32_t addr, uint32_t size);
+		void DisableDataBreakpoint();
+		bool DataBreakpointTriggered();
+
 		bool isNTSC() const
 		{
 			return m_isNtsc;
@@ -323,6 +327,7 @@ namespace am
 		bool m_breakAtNextInstruction = false;
 		bool m_breakAtNextCopperInstruction = false;
 		bool m_breakAtLine = false;
+		bool m_breakAtAddressChanged = false;
 		bool m_running = true;
 
 		struct BitPlaneControl
@@ -355,6 +360,9 @@ namespace am
 		uint32_t m_breakpoint  = 0;
 		uint32_t m_breakAtRegister = 0;
 		uint32_t m_breakAtLineNum = 0;
+		uint32_t m_dataBreakpoint = 0;
+		uint32_t m_currentDataBreakpointData = 0;
+		uint32_t m_dataBreakpointSize = 0;
 
 		uint32_t m_sharedBusRws = 0;
 		uint32_t m_exclusiveBusRws = 0;

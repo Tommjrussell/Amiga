@@ -57,5 +57,10 @@ namespace guru
 		bool m_trackPc = true;
 		uint32_t m_disassemblyStart = 0;
 		bool m_breakOnUnimplementedRegister = false;
+
+		bool m_dataBpEnabled = false;
+		uint32_t m_dataBp = 0;
+		int m_dataBpSize = 0;
+
 	};
 }
