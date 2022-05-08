@@ -947,7 +947,7 @@ void M68000::SetStatusRegister(uint16_t value)
 		std::swap(m_regs.a[7], m_regs.altA7);
 	}
 
-	m_regs.status = value & 0b1111011100011111;
+	m_regs.status = value & 0b11110111'00011111;
 }
 
 void M68000::SetFlag(uint16_t flag, bool condition)
@@ -2040,7 +2040,7 @@ bool M68000::Opcode_addq(int& delay)
 
 bool M68000::Opcode_bitwise_immediate(int& delay)
 {
-	const auto op = m_operation & 0b00001110'0000000;
+	const auto op = m_operation & 0b00001110'00000000;
 
 	uint64_t eaValue;
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
@@ -2299,7 +2299,7 @@ bool M68000::Opcode_scc(int& delay)
 
 bool M68000::Opcode_bitwise_to_status(int& delay)
 {
-	const auto op = m_operation & 0b00001110'0000000;
+	const auto op = m_operation & 0b00001110'00000000;
 
 	uint16_t value = m_regs.status;
 
