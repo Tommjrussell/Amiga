@@ -213,7 +213,7 @@ bool guru::AmigaApp::Update()
 
 		m_amiga->SetJoystickMove(m_joystickState.x, m_joystickState.y);
 
-		m_joystickState = m_oldJoystickState;
+		m_oldJoystickState = m_joystickState;
 
 		auto now = std::chrono::high_resolution_clock::now();
 
