@@ -383,17 +383,28 @@ void guru::Debugger::DrawControls()
 	ImGui::InputInt("##breakpoint", (int*)&m_breakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue);
 	ImGui::PopItemWidth();
 
-	if (ImGui::Checkbox("Break on unimplemented register", &m_breakOnUnimplementedRegister))
+	if (ImGui::Checkbox("Break on register", &m_breakOnRegister))
 	{
-		if (m_breakOnUnimplementedRegister)
+		if (m_breakOnRegister)
 		{
-			m_amiga->EnableBreakOnRegister(0xffff'ffff);
+			m_amiga->EnableBreakOnRegister(m_regBreakpoint);
 		}
 		else
 		{
 			m_amiga->DisableBreakOnRegister();
 		}
 	}
+	ImGui::SameLine();
+
+	ImGui::PushItemWidth(64);
+	if (ImGui::InputInt("##registerBreakpoint", (int*)&m_regBreakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
+	{
+		if (m_breakOnRegister)
+		{
+			m_amiga->EnableBreakOnRegister(m_regBreakpoint);
+		}
+	}
+	ImGui::PopItemWidth();
 
 	if (ImGui::Button("PC History"))
 		ImGui::OpenPopup("pc_history_popup");
