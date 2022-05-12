@@ -1372,10 +1372,10 @@ void am::Amiga::SetJoystickMove(int x, int y)
 {
 	auto& joy1dat = Reg(Register::JOY1DAT);
 
-	const bool left = (x != -1);
-	const bool right = (x != 1);
-	const bool up = (y != -1);
-	const bool down = (y != 1);
+	const bool left = (x >= 0);
+	const bool right = (x <= 0);
+	const bool up = (y >= 0);
+	const bool down = (y <= 0);
 
 	joy1dat = 0;
 

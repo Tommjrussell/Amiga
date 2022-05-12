@@ -276,7 +276,10 @@ namespace guru
 
 		for (int i = 0; i < 12; i++)
 		{
-			state.button[i] = (i < numButtons) ? (buttons[i] == GLFW_PRESS) : false;
+			if (i < numButtons && buttons[i] == GLFW_PRESS)
+			{
+				state.buttons |= 1 << i;
+			}
 		}
 
 		m_app->SetJoystickState(state);

@@ -203,15 +203,19 @@ bool guru::AmigaApp::Update()
 	}
 	else if (m_isRunning)
 	{
+		m_joystickState.buttons |= m_emulatedJoystickState.buttons;
+
+		const auto buttonsDiff = m_joystickState.buttons ^ m_oldJoystickState.buttons;
+
 		for (int b = 0; b < 3; b++)
 		{
-			if (m_joystickState.button[b] != m_oldJoystickState.button[b])
+			if (buttonsDiff & (1 << b))
 			{
-				m_amiga->SetControllerButton(1, b, m_joystickState.button[b]);
+				m_amiga->SetControllerButton(1, b, m_joystickState.buttons & (1 << b));
 			}
 		}
-
-		m_amiga->SetJoystickMove(m_joystickState.x, m_joystickState.y);
+		true + false;
+		m_amiga->SetJoystickMove(m_joystickState.x + m_emulatedJoystickState.x, m_joystickState.y + m_emulatedJoystickState.y);
 
 		m_oldJoystickState = m_joystickState;
 
@@ -279,6 +283,9 @@ void guru::AmigaApp::Render()
 		if (ImGui::BeginMenu("Options"))
 		{
 			ImGui::MenuItem("CRT Emulation", "", &m_useCrtEmulation);
+			ImGui::MenuItem("Joystick Emulation", "", &m_joystickEmulation);
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("Arrow keys + ctrl simulate joystick input");
 			ImGui::EndMenu();
 		}
 
@@ -409,6 +416,28 @@ bool guru::AmigaApp::SetKey(int key, int action, int mods)
 	{
 		if (action == GLFW_PRESS || action == GLFW_RELEASE)
 		{
+			if (m_joystickEmulation)
+			{
+				switch (Key(key))
+				{
+				case Key::KEY_RIGHT:
+					m_emulatedJoystickState.x = (action == GLFW_PRESS) ? 1 : 0;
+					return true;
+				case Key::KEY_LEFT:
+					m_emulatedJoystickState.x = (action == GLFW_PRESS) ? -1 : 0;
+					return true;
+				case Key::KEY_DOWN:
+					m_emulatedJoystickState.y = (action == GLFW_PRESS) ? 1 : 0;
+					return true;
+				case Key::KEY_UP:
+					m_emulatedJoystickState.y = (action == GLFW_PRESS) ? -1 : 0;
+					return true;
+				case Key::KEY_RIGHT_CONTROL:
+					m_emulatedJoystickState.buttons = (action == GLFW_PRESS) ? 1 : 0;
+					return true;
+				}
+			}
+
 			ConvertAndSendKeyCode(Key(key), action == GLFW_PRESS);
 		}
 		return true;

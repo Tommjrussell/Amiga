@@ -29,7 +29,7 @@ namespace guru
 	{
 		int x;
 		int y;
-		bool button[12];
+		uint32_t buttons;
 	};
 
 	class AmigaApp
@@ -74,6 +74,7 @@ namespace guru
 	private:
 		bool m_isQuitting = false;
 		bool m_useCrtEmulation = true;
+		bool m_joystickEmulation = false;
 		bool m_debuggerOpen = false;
 		bool m_ccDebuggerOpen = false;
 		bool m_isRunning = false;
@@ -98,6 +99,7 @@ namespace guru
 
 		JoystickState m_joystickState = {};
 		JoystickState m_oldJoystickState = {};
+		JoystickState m_emulatedJoystickState = {};
 
 		std::map<util::Key, uint8_t> m_keyMap;
 	};
