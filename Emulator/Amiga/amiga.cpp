@@ -1667,7 +1667,8 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 
 	case am::Register::BPL1DAT:
 	{
-		memset(m_pixelBuffer.data() + m_pixelBufferLoadPtr, 0, 16);
+		memset(m_playfieldBuffer[0].data() + m_pixelBufferLoadPtr, 0, 16);
+		memset(m_playfieldBuffer[1].data() + m_pixelBufferLoadPtr, 0, 16);
 
 		for (int i = 0; i < m_bitplane.numPlanesEnabled; i++)
 		{
@@ -1675,11 +1676,11 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 
 			for (int j = 0; j < 16; j++)
 			{
-				m_pixelBuffer[m_pixelBufferLoadPtr + j] |= (bits & (32768u >> j)) != 0 ? (1 << i) : 0;
+				m_playfieldBuffer[i & 1][m_pixelBufferLoadPtr + j] |= (bits & (32768u >> j)) != 0 ? (1 << i) : 0;
 			}
 		}
 
-		m_pixelBufferReadPtr = (m_pixelBufferLoadPtr - (m_bitplane.hires ? 24 : 12)) & kPixelBufferMask; // TODO: apply horizontal delay
+		m_pixelBufferReadPtr = (m_pixelBufferLoadPtr - (m_bitplane.hires ? 24 : 12)) & kPixelBufferMask;
 		m_pixelBufferLoadPtr = (m_pixelBufferLoadPtr + 16) & kPixelBufferMask;
 
 	}	break;
@@ -2017,13 +2018,36 @@ void am::Amiga::UpdateScreen()
 			{
 				int loresPixelPos = (xPos * 2 + x / 2);
 
-				int offset = x - m_bitplane.playfieldDelay[0] * 2;
+				int playfieldPtr0 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[0] * 2)) & kPixelBufferMask;
+				int playfieldPtr1 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[1] * 2)) & kPixelBufferMask;
 
 				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
 					if (loresPixelPos >= startIndex && loresPixelPos < endIndex)
 					{
-						auto value = m_pixelBuffer[(m_pixelBufferReadPtr + offset) & kPixelBufferMask];
+						int value;
+
+						if (m_bitplane.doublePlayfield)
+						{
+							uint8_t pfValue[2];
+
+							pfValue[0] = m_playfieldBuffer[0][playfieldPtr0];
+							pfValue[1] = m_playfieldBuffer[1][playfieldPtr1] >> 1;
+
+							const int fromPlayfield = (pfValue[m_bitplane.playfieldPriority] != 0)
+								? m_bitplane.playfieldPriority
+								: pfValue[1 - m_bitplane.playfieldPriority] != 0
+								? 1 - m_bitplane.playfieldPriority
+								: 0;
+
+							value = pfValue[fromPlayfield];
+							value = ((value & 0b10000) >> 2) | ((value & 0b100) >> 1) | value & 1;
+							value += (8 * fromPlayfield);
+						}
+						else
+						{
+							value = m_playfieldBuffer[0][playfieldPtr0] | m_playfieldBuffer[1][playfieldPtr1];
+						}
 
 						(*m_currentScreen.get())[index++] = m_palette[value];
 					}
@@ -2032,7 +2056,8 @@ void am::Amiga::UpdateScreen()
 						(*m_currentScreen.get())[index++] = m_palette[0];
 					}
 				}
-				m_pixelBuffer[(m_pixelBufferReadPtr + offset) & kPixelBufferMask] = 0;
+				m_playfieldBuffer[0][playfieldPtr0] = 0;
+				m_playfieldBuffer[1][playfieldPtr1] = 0;
 			}
 			m_pixelBufferReadPtr += 4;
 		}
@@ -2042,13 +2067,36 @@ void am::Amiga::UpdateScreen()
 			{
 				int loresPixelPos = (xPos * 2 + x);
 
-				int offset = x - m_bitplane.playfieldDelay[0];
+				int playfieldPtr0 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[0])) & kPixelBufferMask;
+				int playfieldPtr1 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[1])) & kPixelBufferMask;
 
 				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
 					if (loresPixelPos >= startIndex && loresPixelPos < endIndex)
 					{
-						auto value = m_pixelBuffer[(m_pixelBufferReadPtr + offset) & kPixelBufferMask];
+						int value;
+
+						if (m_bitplane.doublePlayfield)
+						{
+							uint8_t pfValue[2];
+
+							pfValue[0] = m_playfieldBuffer[0][playfieldPtr0];
+							pfValue[1] = m_playfieldBuffer[1][playfieldPtr1] >> 1;
+
+							const int fromPlayfield = (pfValue[m_bitplane.playfieldPriority] != 0)
+								? m_bitplane.playfieldPriority
+								: pfValue[1 - m_bitplane.playfieldPriority] != 0
+								? 1 - m_bitplane.playfieldPriority
+								: 0;
+
+							value = pfValue[fromPlayfield];
+							value = ((value & 0b10000) >> 2) | ((value & 0b100) >> 1) | value & 1;
+							value += (8 * fromPlayfield);
+						}
+						else
+						{
+							value = m_playfieldBuffer[0][playfieldPtr0] | m_playfieldBuffer[1][playfieldPtr1];
+						}
 
 						(*m_currentScreen.get())[index++] = m_palette[value];
 						(*m_currentScreen.get())[index++] = m_palette[value];
@@ -2059,7 +2107,8 @@ void am::Amiga::UpdateScreen()
 						(*m_currentScreen.get())[index++] = m_palette[0];
 					}
 				}
-				m_pixelBuffer[(m_pixelBufferReadPtr + offset) & kPixelBufferMask] = 0;
+				m_playfieldBuffer[0][playfieldPtr0] = 0;
+				m_playfieldBuffer[1][playfieldPtr1] = 0;
 
 			}
 			m_pixelBufferReadPtr += 2;

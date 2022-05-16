@@ -389,7 +389,9 @@ namespace am
 		constexpr static int kPixelBufferSize = 64;
 		constexpr static int kPixelBufferMask = kPixelBufferSize - 1;
 
-		std::array<uint8_t, kPixelBufferSize> m_pixelBuffer;
+		using PlayfieldBuffer = std::array<uint8_t, kPixelBufferSize>;
+
+		std::array<PlayfieldBuffer, 2> m_playfieldBuffer;
 		int m_pixelBufferLoadPtr = 0;
 		int m_pixelBufferReadPtr = 0;
 
