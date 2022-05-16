@@ -1356,7 +1356,10 @@ void am::Amiga::SetControllerButton(int controller, int button, bool pressed)
 	}	break;
 
 	case 1: // right mouse button / fire 2
-		// TODO
+		if (controller == 0)
+		{
+			m_rightMouseButtonDown = pressed;
+		}
 		break;
 
 	case 2: // middle mouse button / fire 3?
@@ -1501,6 +1504,36 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		// Serial port curretly not emulated but silently accept
 		// control values to this register.
 		break;
+
+	case am::Register::POTGO:
+	{
+		if ((value & 0xc000) == 0xc000)
+		{
+			Reg(am::Register::POTGOR) &= ~0xc000;
+			Reg(am::Register::POTGOR) |= 0x4000;
+		}
+
+		if ((value & 0x3000) == 0x3000)
+		{
+			Reg(am::Register::POTGOR) &= ~0x3000;
+			Reg(am::Register::POTGOR) |= 0x1000;
+		}
+
+		if ((value & 0x0c00) == 0x0c00)
+		{
+			Reg(am::Register::POTGOR) &= ~0x0c00;
+			if (!m_rightMouseButtonDown)
+			{
+				Reg(am::Register::POTGOR) |= 0x0400;
+			}
+		}
+
+		if ((value & 0x0300) == 0x0300)
+		{
+			Reg(am::Register::POTGOR) &= ~0x0300;
+			Reg(am::Register::POTGOR) |= 0x0100;
+		}
+	} break;
 
 	case am::Register::BLTCON0:
 	case am::Register::BLTCON1:

@@ -330,6 +330,8 @@ namespace am
 		bool m_breakAtAddressChanged = false;
 		bool m_running = true;
 
+		bool m_rightMouseButtonDown = false;
+
 		struct BitPlaneControl
 		{
 			bool hires = false;
