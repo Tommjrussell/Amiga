@@ -156,6 +156,15 @@ namespace am
 		bool useWordSync = false;
 	};
 
+	struct Sprite
+	{
+		bool active = false;
+		bool armed = false;
+		int startLine = 0;
+		int endLine = 0;
+		uint32_t ptr = 0;
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -399,6 +408,8 @@ namespace am
 
 		std::unique_ptr<ScreenBuffer> m_currentScreen;
 		std::unique_ptr<ScreenBuffer> m_lastScreen;
+
+		Sprite m_sprite[8];
 
 		FloppyDisk m_floppyDisk[4];
 		FloppyDrive m_floppyDrive[4];

@@ -1725,6 +1725,55 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	case am::Register::BPL6DAT:
 		break;
 
+	case am::Register::SPR0POS:
+	case am::Register::SPR0CTL:
+	case am::Register::SPR0DATA:
+	case am::Register::SPR0DATB:
+	case am::Register::SPR1POS:
+	case am::Register::SPR1CTL:
+	case am::Register::SPR1DATA:
+	case am::Register::SPR1DATB:
+	case am::Register::SPR2POS:
+	case am::Register::SPR2CTL:
+	case am::Register::SPR2DATA:
+	case am::Register::SPR2DATB:
+	case am::Register::SPR3POS:
+	case am::Register::SPR3CTL:
+	case am::Register::SPR3DATA:
+	case am::Register::SPR3DATB:
+	case am::Register::SPR4POS:
+	case am::Register::SPR4CTL:
+	case am::Register::SPR4DATA:
+	case am::Register::SPR4DATB:
+	case am::Register::SPR5POS:
+	case am::Register::SPR5CTL:
+	case am::Register::SPR5DATA:
+	case am::Register::SPR5DATB:
+	case am::Register::SPR6POS:
+	case am::Register::SPR6CTL:
+	case am::Register::SPR6DATA:
+	case am::Register::SPR6DATB:
+	case am::Register::SPR7POS:
+	case am::Register::SPR7CTL:
+	case am::Register::SPR7DATA:
+	case am::Register::SPR7DATB:
+	{
+		auto spriteNum = (regNum - uint32_t(am::Register::SPR0POS)) / 8;
+		auto spriteReg = ((regNum - uint32_t(am::Register::SPR0POS)) / 2) % 4;
+
+		switch (spriteReg)
+		{
+		case 0: // SPRxPOS
+			break;
+		case 1: // SPRxCTL
+			break;
+		case 2:	// SPRxDATA
+			break;
+		case 3: // SPRxDATB
+			break;
+		}
+	}	break;
+
 	case am::Register::COLOR00:
 	case am::Register::COLOR01:
 	case am::Register::COLOR02:
@@ -2508,12 +2557,11 @@ bool am::Amiga::DoScanlineDma()
 		return false;
 	}
 
-	// Sprites and display DMA only active on lines within the display window
-	if (m_vPos < m_windowStartY || m_vPos >= m_windowStopY)
-		return false;
+	// Display DMA only active on lines within the display window
+	const bool inDisplayRange = (m_vPos >= m_windowStartY && m_vPos < m_windowStopY);
 
 	// Sprites can be wiped out by display DMA so check that first
-	if (DmaEnabled(Dma::BPLEN))
+	if (inDisplayRange && DmaEnabled(Dma::BPLEN))
 	{
 		auto ddfstrt = Reg(Register::DDFSTRT) & 0b0000000011111100;
 		auto ddfstop = Reg(Register::DDFSTOP) & 0b0000000011111100;
@@ -2540,6 +2588,45 @@ bool am::Amiga::DoScanlineDma()
 				m_bitplane.ptr[bp] += 2;
 				WriteRegister(uint32_t(Register::BPL1DAT) + (bp << 1), bplData);
 				return true;
+			}
+		}
+	}
+
+	const int spriteStart = m_isNtsc ? 20 : 25;
+
+	if (m_vPos >= spriteStart && DmaEnabled(Dma::SPREN))
+	{
+		if (m_hPos < 0x34 && oddClock)
+		{
+			const int spriteNum = (m_hPos - 0x18) / 4;
+			const int fetchNum = ((m_hPos - 0x18) / 2) & 1;
+
+			auto& sprite = m_sprite[spriteNum];
+
+			if (m_vPos == spriteStart || m_vPos == sprite.endLine)
+			{
+				// 1st fetch goes to SPRxPOS, 2nd fetch goes to SPRxCTL, which also disarms the sprite
+				auto fetchedWord = ReadChipWord(sprite.ptr);
+				sprite.ptr += 2;
+				const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0POS) : uint32_t(Register::SPR0CTL);
+				WriteRegister(baseReg + spriteNum * 8, fetchedWord);
+				sprite.active = false;		// Sprite DMA now goes inactive until start line is reached.
+			}
+			else
+			{
+				if (m_vPos == sprite.startLine)
+				{
+					sprite.active = true;
+				}
+
+				if (sprite.active)
+				{
+					// 1st fetch goes to SPRxDATB, 2nd fetch goes to SPRxDATA, which also arms the sprite
+					auto fetchedWord = ReadChipWord(sprite.ptr);
+					sprite.ptr += 2;
+					const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0DATB) : uint32_t(Register::SPR0DATA);
+					WriteRegister(baseReg + spriteNum * 8, fetchedWord);
+				}
 			}
 		}
 	}
