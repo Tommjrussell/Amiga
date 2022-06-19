@@ -160,6 +160,7 @@ namespace am
 	{
 		bool active = false;
 		bool armed = false;
+		uint16_t horizontalStart = 0;
 		int startLine = 0;
 		int endLine = 0;
 		uint32_t ptr = 0;

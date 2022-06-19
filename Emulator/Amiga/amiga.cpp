@@ -1760,15 +1760,33 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	{
 		auto spriteNum = (regNum - uint32_t(am::Register::SPR0POS)) / 8;
 		auto spriteReg = ((regNum - uint32_t(am::Register::SPR0POS)) / 2) % 4;
+		auto& sprite = m_sprite[spriteNum];
 
 		switch (spriteReg)
 		{
 		case 0: // SPRxPOS
-			break;
+		{
+			sprite.startLine &= 0x0100;
+			sprite.startLine |= (value & 0xff00) >> 8;
+			sprite.horizontalStart &= 0x0001;
+			sprite.horizontalStart |= (value & 0x00ff) << 1;
+		}	break;
+
 		case 1: // SPRxCTL
-			break;
+		{
+			sprite.horizontalStart &= ~0x0001;
+			sprite.horizontalStart |= value & 0x0001;
+			sprite.startLine &= 0x00ff;
+			sprite.startLine |= (value & 0x0004) << 6;
+			sprite.endLine = (value & 0xff00) >> 8 | ((value & 0x0002) << 7);
+			sprite.armed = false;
+		}	break;
+
 		case 2:	// SPRxDATA
-			break;
+		{
+			sprite.armed = true;
+		}	break;
+
 		case 3: // SPRxDATB
 			break;
 		}
@@ -2611,22 +2629,22 @@ bool am::Amiga::DoScanlineDma()
 				const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0POS) : uint32_t(Register::SPR0CTL);
 				WriteRegister(baseReg + spriteNum * 8, fetchedWord);
 				sprite.active = false;		// Sprite DMA now goes inactive until start line is reached.
+				return true;
 			}
-			else
-			{
-				if (m_vPos == sprite.startLine)
-				{
-					sprite.active = true;
-				}
 
-				if (sprite.active)
-				{
-					// 1st fetch goes to SPRxDATB, 2nd fetch goes to SPRxDATA, which also arms the sprite
-					auto fetchedWord = ReadChipWord(sprite.ptr);
-					sprite.ptr += 2;
-					const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0DATB) : uint32_t(Register::SPR0DATA);
-					WriteRegister(baseReg + spriteNum * 8, fetchedWord);
-				}
+			if (m_vPos == sprite.startLine)
+			{
+				sprite.active = true;
+			}
+
+			if (sprite.active)
+			{
+				// 1st fetch goes to SPRxDATB, 2nd fetch goes to SPRxDATA, which also arms the sprite
+				auto fetchedWord = ReadChipWord(sprite.ptr);
+				sprite.ptr += 2;
+				const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0DATB) : uint32_t(Register::SPR0DATA);
+				WriteRegister(baseReg + spriteNum * 8, fetchedWord);
+				return true;
 			}
 		}
 	}
