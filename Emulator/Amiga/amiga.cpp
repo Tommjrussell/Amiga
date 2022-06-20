@@ -1725,6 +1725,29 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	case am::Register::BPL6DAT:
 		break;
 
+	case am::Register::SPR0PTH:
+	case am::Register::SPR0PTL:
+	case am::Register::SPR1PTH:
+	case am::Register::SPR1PTL:
+	case am::Register::SPR2PTH:
+	case am::Register::SPR2PTL:
+	case am::Register::SPR3PTH:
+	case am::Register::SPR3PTL:
+	case am::Register::SPR4PTH:
+	case am::Register::SPR4PTL:
+	case am::Register::SPR5PTH:
+	case am::Register::SPR5PTL:
+	case am::Register::SPR6PTH:
+	case am::Register::SPR6PTL:
+	case am::Register::SPR7PTH:
+	case am::Register::SPR7PTL:
+	{
+		const auto spriteNum = (regNum - uint32_t(Register::SPR0PTH)) / 4;
+		const auto highWord = (regNum & 0b010) == 0;
+		SetLongPointerValue(m_sprite[spriteNum].ptr, highWord, value);
+	}	break;
+
+
 	case am::Register::SPR0POS:
 	case am::Register::SPR0CTL:
 	case am::Register::SPR0DATA:
@@ -2105,12 +2128,15 @@ void am::Amiga::UpdateScreen()
 	if (bufferLine < 0 || bufferLine >= (m_isNtsc ? 216 : 272))
 		return;
 
+	uint8_t values[4] = {};
+	uint8_t pfMask[4] = {};
+
+	int valueIndex = 0;
+
 	if (line >= m_windowStartY && line < m_windowStopY)
 	{
 		auto startIndex = m_windowStartX - 0x79;
 		auto endIndex = m_windowStopX - 0x79;
-
-		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
 
 		if (m_bitplane.hires)
 		{
@@ -2123,16 +2149,19 @@ void am::Amiga::UpdateScreen()
 
 				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
+					int value = 0;
+
 					if (loresPixelPos >= startIndex && loresPixelPos < endIndex)
 					{
-						int value;
-
 						if (m_bitplane.doublePlayfield)
 						{
 							uint8_t pfValue[2];
 
 							pfValue[0] = m_playfieldBuffer[0][playfieldPtr0];
 							pfValue[1] = m_playfieldBuffer[1][playfieldPtr1] >> 1;
+
+							pfMask[valueIndex] |= (pfValue[0] != 0) ? 1 : 0;
+							pfMask[valueIndex] |= (pfValue[1] != 0) ? 2 : 0;
 
 							const int fromPlayfield = (pfValue[m_bitplane.playfieldPriority] != 0)
 								? m_bitplane.playfieldPriority
@@ -2147,14 +2176,11 @@ void am::Amiga::UpdateScreen()
 						else
 						{
 							value = m_playfieldBuffer[0][playfieldPtr0] | m_playfieldBuffer[1][playfieldPtr1];
+							pfMask[valueIndex] = (value != 0) ? 1 : 0;
 						}
+					}
 
-						(*m_currentScreen.get())[index++] = m_palette[value];
-					}
-					else
-					{
-						(*m_currentScreen.get())[index++] = m_palette[0];
-					}
+					values[valueIndex++] = value;
 				}
 				m_playfieldBuffer[0][playfieldPtr0] = 0;
 				m_playfieldBuffer[1][playfieldPtr1] = 0;
@@ -2172,16 +2198,19 @@ void am::Amiga::UpdateScreen()
 
 				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
+					int value = 0;
+
 					if (loresPixelPos >= startIndex && loresPixelPos < endIndex)
 					{
-						int value;
-
 						if (m_bitplane.doublePlayfield)
 						{
 							uint8_t pfValue[2];
 
 							pfValue[0] = m_playfieldBuffer[0][playfieldPtr0];
 							pfValue[1] = m_playfieldBuffer[1][playfieldPtr1] >> 1;
+
+							pfMask[valueIndex] |= (pfValue[0] != 0) ? 1 : 0;
+							pfMask[valueIndex] |= (pfValue[1] != 0) ? 2 : 0;
 
 							const int fromPlayfield = (pfValue[m_bitplane.playfieldPriority] != 0)
 								? m_bitplane.playfieldPriority
@@ -2196,16 +2225,14 @@ void am::Amiga::UpdateScreen()
 						else
 						{
 							value = m_playfieldBuffer[0][playfieldPtr0] | m_playfieldBuffer[1][playfieldPtr1];
+							pfMask[valueIndex] = (value != 0) ? 1 : 0;
 						}
+					}
 
-						(*m_currentScreen.get())[index++] = m_palette[value];
-						(*m_currentScreen.get())[index++] = m_palette[value];
-					}
-					else
-					{
-						(*m_currentScreen.get())[index++] = m_palette[0];
-						(*m_currentScreen.get())[index++] = m_palette[0];
-					}
+					pfMask[valueIndex + 1] = pfMask[valueIndex];
+					values[valueIndex++] = value;
+					values[valueIndex++] = value;
+
 				}
 				m_playfieldBuffer[0][playfieldPtr0] = 0;
 				m_playfieldBuffer[1][playfieldPtr1] = 0;
@@ -2213,6 +2240,60 @@ void am::Amiga::UpdateScreen()
 			}
 			m_pixelBufferReadPtr += 2;
 		}
+
+		uint8_t spriteValue[2] = {};
+		uint8_t spriteNum[2] = {};
+
+		for (int s = 0; s < 8; s++)
+		{
+			auto& sprite = m_sprite[s];
+			if (!sprite.armed)
+				continue;
+
+			for (int x = 0; x < 2; x++)
+			{
+				const int loresPixelPos = (xPos * 2 + x);
+
+				// Note: Sprites horizontal position is delayed by an extra pixel (hence 0x78 instead of 0x79 in next line)
+				if (sprite.drawPos > 0 || (sprite.horizontalStart - 0x78) == loresPixelPos)
+				{
+					auto startIndex = m_windowStartX - 0x79;
+
+					// has a higher priority sprite already been written to this pixel?
+					if (loresPixelPos >= startIndex && spriteValue[x] == 0)
+					{
+						const auto sprdata = Reg(Register(int(Register::SPR0DATA) + s * 8));
+						const auto sprdatb = Reg(Register(int(Register::SPR0DATB) + s * 8));
+
+						uint8_t value = 0;
+						value = ((sprdata >> (15 - sprite.drawPos)) & 1) | (((sprdatb >> (15 - sprite.drawPos)) << 1) & 2);
+						if (value != 0)
+						{
+							spriteValue[x] = 16 + (s / 2) * 4 + value;
+							spriteNum[x] = s;
+						}
+					}
+
+					sprite.drawPos++;
+					sprite.drawPos &= 0x0f;
+				}
+			}
+		}
+
+		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
+		for (int i = 0; i < valueIndex; i++)
+		{
+			if (spriteValue[i / 2] != 0)
+			{
+				// TODO : Check playfield/sprite priority!
+				(*m_currentScreen.get())[index++] = m_palette[spriteValue[i / 2]];
+			}
+			else
+			{
+				(*m_currentScreen.get())[index++] = m_palette[values[i]];
+			}
+		}
+
 	}
 	else
 	{
@@ -2616,8 +2697,8 @@ bool am::Amiga::DoScanlineDma()
 	{
 		if (m_hPos < 0x34 && oddClock)
 		{
-			const int spriteNum = (m_hPos - 0x18) / 4;
-			const int fetchNum = ((m_hPos - 0x18) / 2) & 1;
+			const int spriteNum = (m_hPos - 0x15) / 4;
+			const int fetchNum = ((m_hPos - 0x15) / 2) & 1;
 
 			auto& sprite = m_sprite[spriteNum];
 
@@ -2642,7 +2723,7 @@ bool am::Amiga::DoScanlineDma()
 				// 1st fetch goes to SPRxDATB, 2nd fetch goes to SPRxDATA, which also arms the sprite
 				auto fetchedWord = ReadChipWord(sprite.ptr);
 				sprite.ptr += 2;
-				const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0DATB) : uint32_t(Register::SPR0DATA);
+				const uint32_t baseReg = (fetchNum == 0) ? uint32_t(Register::SPR0DATA) : uint32_t(Register::SPR0DATB);
 				WriteRegister(baseReg + spriteNum * 8, fetchedWord);
 				return true;
 			}
