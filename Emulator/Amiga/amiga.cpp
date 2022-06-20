@@ -1371,6 +1371,19 @@ void am::Amiga::SetControllerButton(int controller, int button, bool pressed)
 	}
 }
 
+void am::Amiga::SetMouseMove(int x, int y)
+{
+	auto& joy0dat = Reg(Register::JOY0DAT);
+
+	auto vertCount = (joy0dat >> 8) & 0xff;
+	auto horzCount = joy0dat & 0xff;
+
+	horzCount += x;
+	vertCount += y;
+
+	joy0dat = uint16_t(vertCount << 8) | uint16_t(horzCount & 0xff);
+}
+
 void am::Amiga::SetJoystickMove(int x, int y)
 {
 	auto& joy1dat = Reg(Register::JOY1DAT);

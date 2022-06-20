@@ -248,6 +248,7 @@ namespace am
 
 		void SetControllerButton(int controller, int button, bool pressed);
 		void SetJoystickMove(int x, int y);
+		void SetMouseMove(int x, int y);
 
 		void QueueKeyPress(uint8_t keycode);
 

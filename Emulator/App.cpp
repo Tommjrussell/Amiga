@@ -461,7 +461,7 @@ void guru::AmigaApp::SetMouseButton(int button, int action, int mods)
 
 void guru::AmigaApp::SetMouseMove(double xMove, double yMove)
 {
-	// TODO
+	m_amiga->SetMouseMove(int(std::floor(xMove / 2)), int(std::floor(yMove / 2)));
 }
 
 void guru::AmigaApp::ConvertAndSendKeyCode(util::Key key, bool down)
