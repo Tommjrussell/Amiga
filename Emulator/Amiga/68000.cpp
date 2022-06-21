@@ -396,7 +396,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_bitwise,			//	and.{s}   {ea}, D{REG}
 	&M68000::Opcode_bitwise,			//	and.{s}   D{REG}, {ea}
 	&M68000::Opcode_adda,				//	adda.{WL}  {ea}, A{REG}
-	&M68000::UnimplementOpcode,			//	addx.{s}  {m}
+	&M68000::Opcode_addx,				//	addx.{s}  {m}
 	&M68000::Opcode_add,				//	add.{s}   {ea}, D{REG}
 	&M68000::Opcode_add,				//	add.{s}   D{REG}, {ea}
 	&M68000::Opcode_shift_ea,			//	as{R}     {ea}
@@ -2557,5 +2557,47 @@ bool M68000::Opcode_trap(int& delay)
 	const auto v = 32 + (m_operation & 0b00000000'00001111);
 	StartInternalException(v);
 	delay += 5;
+	return true;
+}
+
+bool M68000::Opcode_addx(int& delay)
+{
+	const auto dReg = (m_operation & 0b00001110'00000000) >> 9;
+	const auto sReg = (m_operation & 0b00000000'00000111);
+
+	const bool memMode = (m_operation & 0b1000) != 0;
+
+	const int extend = (m_regs.status & Extend) ? 1 : 0;
+	const uint16_t zero = (m_regs.status & Zero);
+
+	if (memMode)
+	{
+		const uint32_t sourceAddr = GetReg(m_regs.a[sReg], 4) - m_opcodeSize;
+		const uint32_t destAddr = GetReg(m_regs.a[dReg], 4) - m_opcodeSize;
+		SetReg(m_regs.a[sReg], 4, sourceAddr);
+		SetReg(m_regs.a[dReg], 4, destAddr);
+
+		const uint64_t sourceVal = ReadBus(sourceAddr, m_opcodeSize);
+		const uint64_t destVal = ReadBus(destAddr, m_opcodeSize);
+
+		AluAdd(sourceVal, destVal + extend, m_opcodeSize, AllFlags);
+		m_regs.status &= zero;
+
+		WriteBus(destAddr, m_opcodeSize, uint32_t(destVal));
+
+		delay += 1;
+	}
+	else
+	{
+		const uint64_t sourceVal = GetReg(m_regs.d[sReg], m_opcodeSize);
+		uint64_t destVal = GetReg(m_regs.d[dReg], m_opcodeSize);
+		AluAdd(sourceVal, destVal + extend, m_opcodeSize, AllFlags);
+		m_regs.status &= zero;
+		SetReg(m_regs.d[dReg], m_opcodeSize, uint32_t(destVal));
+
+		if (m_opcodeSize == 4)
+			delay += 2;
+	}
+
 	return true;
 }

@@ -171,6 +171,7 @@ namespace cpu
 		bool Opcode_stop(int& delay);
 		bool Opcode_nop(int& delay);
 		bool Opcode_trap(int& delay);
+		bool Opcode_addx(int& delay);
 
 	private:
 
