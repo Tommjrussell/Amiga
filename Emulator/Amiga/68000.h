@@ -172,6 +172,7 @@ namespace cpu
 		bool Opcode_nop(int& delay);
 		bool Opcode_trap(int& delay);
 		bool Opcode_addx(int& delay);
+		bool Opcode_subx(int& delay);
 
 	private:
 
@@ -213,8 +214,8 @@ namespace cpu
 		bool GetEaValue(const EA& ea, int size, uint64_t& value);
 		bool SetEaValue(const EA& ea, int size, uint64_t value);
 
-		uint64_t AluAdd(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask);
-		uint64_t AluSub(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask);
+		uint64_t AluAdd(uint64_t a, uint64_t b, uint64_t c, int m_opcodeSize, uint16_t flagMask);
+		uint64_t AluSub(uint64_t a, uint64_t b, uint64_t c, int m_opcodeSize, uint16_t flagMask);
 
 	private:
 		IBus* m_bus;

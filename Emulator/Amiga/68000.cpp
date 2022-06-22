@@ -382,7 +382,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_bitwise,			//	or.{s}    {ea}, D{REG}
 	&M68000::Opcode_bitwise,			//	or.{s}    D{REG}, {ea}
 	&M68000::Opcode_suba,				//	suba.{WL}  {ea}, A{REG}
-	&M68000::UnimplementOpcode,			//	subx.{s}  {m}
+	&M68000::Opcode_subx,				//	subx.{s}  {m}
 	&M68000::Opcode_sub,				//	sub.{s}   {ea}, D{REG}
 	&M68000::Opcode_sub,				//	sub.{s}   D{REG}, {ea}
 	&M68000::Opcode_cmpa,				//	cmpa.{WL}  {ea}, A{REG}
@@ -1019,9 +1019,11 @@ bool M68000::EvaluateCondition() const
 	}
 }
 
-uint64_t M68000::AluAdd(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask)
+uint64_t M68000::AluAdd(uint64_t a, uint64_t b, uint64_t c, int m_opcodeSize, uint16_t flagMask)
 {
-	uint64_t result = a + b;
+	// 'c' must be either 0 or 1
+
+	uint64_t result = a + b + c;
 
 	if (flagMask)
 	{
@@ -1059,9 +1061,11 @@ uint64_t M68000::AluAdd(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagM
 	return result;
 }
 
-uint64_t M68000::AluSub(uint64_t a, uint64_t b, int m_opcodeSize, uint16_t flagMask)
+uint64_t M68000::AluSub(uint64_t a, uint64_t b, uint64_t c, int m_opcodeSize, uint16_t flagMask)
 {
-	uint64_t result = a - b;
+	// 'c' must be either 0 or 1
+
+	uint64_t result = a - b - c;
 
 	if (flagMask)
 	{
@@ -1169,7 +1173,7 @@ bool M68000::Opcode_subq(int& delay)
 		subValue = 8;
 
 	const uint16_t flagMask = (m_ea[0].type != EffectiveAddressType::AddressRegister) ? AllFlags : 0;
-	value = AluSub(value, subValue, m_opcodeSize, flagMask);
+	value = AluSub(value, subValue, 0, m_opcodeSize, flagMask);
 
 	if (!SetEaValue(m_ea[0], m_opcodeSize, value))
 		return false;
@@ -1226,7 +1230,7 @@ bool M68000::Opcode_cmpa(int& delay)
 		srcValue = SignExtend(uint16_t(srcValue));
 	}
 
-	AluSub(destValue, srcValue, 4, AllFlagsMinusExtend);
+	AluSub(destValue, srcValue, 0, 4, AllFlagsMinusExtend);
 
 	delay += 1;
 
@@ -1239,7 +1243,7 @@ bool M68000::Opcode_cmpi(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, destValue))
 		return false;
 
-	AluSub(destValue, m_immediateValue, m_opcodeSize, AllFlagsMinusExtend);
+	AluSub(destValue, m_immediateValue, 0, m_opcodeSize, AllFlagsMinusExtend);
 
 	if (m_opcodeSize == 4)
 	{
@@ -1354,7 +1358,7 @@ bool M68000::Opcode_add(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	const uint64_t result = AluAdd(regValue, eaValue, m_opcodeSize, AllFlags);
+	const uint64_t result = AluAdd(regValue, eaValue, 0, m_opcodeSize, AllFlags);
 
 	if (ToEa)
 	{
@@ -1488,7 +1492,7 @@ bool M68000::Opcode_cmp(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, srcValue))
 		return false;
 
-	AluSub(destValue, srcValue, m_opcodeSize, AllFlagsMinusExtend);
+	AluSub(destValue, srcValue, 0, m_opcodeSize, AllFlagsMinusExtend);
 
 	if (m_opcodeSize == 4)
 	{
@@ -1545,12 +1549,12 @@ bool M68000::Opcode_sub(int& delay)
 	uint64_t result;
 	if (ToEa)
 	{
-		result = AluSub(eaValue, regValue, m_opcodeSize, AllFlags);
+		result = AluSub(eaValue, regValue, 0, m_opcodeSize, AllFlags);
 		SetEaValue(m_ea[0], m_opcodeSize, result);
 	}
 	else
 	{
-		result = AluSub(regValue, eaValue, m_opcodeSize, AllFlags);
+		result = AluSub(regValue, eaValue, 0, m_opcodeSize, AllFlags);
 		SetReg(m_regs.d[reg], m_opcodeSize, uint32_t(result));
 		if (m_opcodeSize == 4)
 		{
@@ -1880,7 +1884,7 @@ bool M68000::Opcode_subi(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	const uint64_t result = AluSub(eaValue, m_immediateValue, m_opcodeSize, AllFlags);
+	const uint64_t result = AluSub(eaValue, m_immediateValue, 0, m_opcodeSize, AllFlags);
 
 	SetEaValue(m_ea[0], m_opcodeSize, result);
 
@@ -2030,7 +2034,7 @@ bool M68000::Opcode_addq(int& delay)
 		return false;
 
 	const uint16_t flagMask = (m_ea[0].type != EffectiveAddressType::AddressRegister) ? AllFlags : 0;
-	const auto result = AluAdd(value, addValue, m_opcodeSize, flagMask);
+	const auto result = AluAdd(value, addValue, 0, m_opcodeSize, flagMask);
 
 	if (!SetEaValue(m_ea[0], m_opcodeSize, result))
 		return false;
@@ -2220,7 +2224,7 @@ bool M68000::Opcode_addi(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	const uint64_t result = AluAdd(eaValue, m_immediateValue, m_opcodeSize, AllFlags);
+	const uint64_t result = AluAdd(eaValue, m_immediateValue, 0, m_opcodeSize, AllFlags);
 
 	SetEaValue(m_ea[0], m_opcodeSize, result);
 
@@ -2238,7 +2242,7 @@ bool M68000::Opcode_neg(int& delay)
 	if (!GetEaValue(m_ea[0], m_opcodeSize, eaValue))
 		return false;
 
-	const uint64_t result = AluSub(0, eaValue, m_opcodeSize, AllFlags);
+	const uint64_t result = AluSub(0, eaValue, 0, m_opcodeSize, AllFlags);
 
 	SetEaValue(m_ea[0], m_opcodeSize, result);
 
@@ -2418,7 +2422,7 @@ bool M68000::Opcode_cmpm(int& delay)
 	const uint64_t axVal = ReadBus(m_regs.a[ax], m_opcodeSize);
 	const uint64_t ayVal = ReadBus(m_regs.a[ay], m_opcodeSize);
 
-	AluSub(axVal, ayVal, m_opcodeSize, AllFlagsMinusExtend);
+	AluSub(axVal, ayVal, 0, m_opcodeSize, AllFlagsMinusExtend);
 
 	m_regs.a[ax] += m_opcodeSize;
 	m_regs.a[ay] += m_opcodeSize;
@@ -2567,7 +2571,7 @@ bool M68000::Opcode_addx(int& delay)
 
 	const bool memMode = (m_operation & 0b1000) != 0;
 
-	const int extend = (m_regs.status & Extend) ? 1 : 0;
+	const uint64_t extend = (m_regs.status & Extend) ? 1 : 0;
 	const uint16_t zero = (m_regs.status & Zero);
 
 	if (memMode)
@@ -2578,10 +2582,9 @@ bool M68000::Opcode_addx(int& delay)
 		SetReg(m_regs.a[dReg], 4, destAddr);
 
 		const uint64_t sourceVal = ReadBus(sourceAddr, m_opcodeSize);
-		const uint64_t destVal = ReadBus(destAddr, m_opcodeSize);
+		uint64_t destVal = ReadBus(destAddr, m_opcodeSize);
 
-		AluAdd(sourceVal, destVal + extend, m_opcodeSize, AllFlags);
-		m_regs.status &= zero;
+		destVal = AluAdd(sourceVal, destVal, extend, m_opcodeSize, AllFlags);
 
 		WriteBus(destAddr, m_opcodeSize, uint32_t(destVal));
 
@@ -2591,13 +2594,56 @@ bool M68000::Opcode_addx(int& delay)
 	{
 		const uint64_t sourceVal = GetReg(m_regs.d[sReg], m_opcodeSize);
 		uint64_t destVal = GetReg(m_regs.d[dReg], m_opcodeSize);
-		AluAdd(sourceVal, destVal + extend, m_opcodeSize, AllFlags);
-		m_regs.status &= zero;
+		destVal = AluAdd(sourceVal, destVal, extend, m_opcodeSize, AllFlags);
 		SetReg(m_regs.d[dReg], m_opcodeSize, uint32_t(destVal));
 
 		if (m_opcodeSize == 4)
 			delay += 2;
 	}
+
+	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
+
+	return true;
+}
+
+bool M68000::Opcode_subx(int& delay)
+{
+	const auto dReg = (m_operation & 0b00001110'00000000) >> 9;
+	const auto sReg = (m_operation & 0b00000000'00000111);
+
+	const bool memMode = (m_operation & 0b1000) != 0;
+
+	const uint64_t extend = (m_regs.status & Extend) ? 1 : 0;
+	const uint16_t zero = (m_regs.status & Zero);
+
+	if (memMode)
+	{
+		const uint32_t sourceAddr = GetReg(m_regs.a[sReg], 4) - m_opcodeSize;
+		const uint32_t destAddr = GetReg(m_regs.a[dReg], 4) - m_opcodeSize;
+		SetReg(m_regs.a[sReg], 4, sourceAddr);
+		SetReg(m_regs.a[dReg], 4, destAddr);
+
+		const uint64_t sourceVal = ReadBus(sourceAddr, m_opcodeSize);
+		uint64_t destVal = ReadBus(destAddr, m_opcodeSize);
+
+		destVal = AluSub(destVal, sourceVal, extend, m_opcodeSize, AllFlags);
+
+		WriteBus(destAddr, m_opcodeSize, uint32_t(destVal));
+
+		delay += 1;
+	}
+	else
+	{
+		const uint64_t sourceVal = GetReg(m_regs.d[sReg], m_opcodeSize);
+		uint64_t destVal = GetReg(m_regs.d[dReg], m_opcodeSize);
+		destVal = AluSub(destVal, sourceVal, extend, m_opcodeSize, AllFlags);
+		SetReg(m_regs.d[dReg], m_opcodeSize, uint32_t(destVal));
+
+		if (m_opcodeSize == 4)
+			delay += 2;
+	}
+
+	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
 
 	return true;
 }
