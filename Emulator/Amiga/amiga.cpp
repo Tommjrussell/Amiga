@@ -2681,7 +2681,7 @@ bool am::Amiga::DoScanlineDma()
 		ddfstrt = std::max(ddfstrt, 0x18);
 		ddfstop = std::min(ddfstop, 0xd8);
 
-		const auto fetchEnd = ddfstop + (m_bitplane.hires ? 0xc : 0x8);
+		const auto fetchEnd = (ddfstop + 0x8) | (m_bitplane.hires ? 0x4 : 0x0);
 
 		if (m_hPos >= ddfstrt && m_hPos < fetchEnd)
 		{
