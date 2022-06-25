@@ -1528,7 +1528,7 @@ bool M68000::Opcode_moveq(int& delay)
 
 	m_regs.d[reg] = value;
 
-	SetFlag(Negative, value > 0);
+	SetFlag(Negative, value < 0);
 	SetFlag(Zero, (value == 0));
 	SetFlag(Overflow | Carry, false);
 
