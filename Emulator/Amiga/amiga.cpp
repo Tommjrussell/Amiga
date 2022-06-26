@@ -930,16 +930,10 @@ void am::Amiga::DoOneTick()
 			m_lineLength = kPAL_lineLength;
 		}
 
+		m_bpFetchState = BpFetchState::Off;
 		if (DmaEnabled(Dma::BPLEN) && m_vPos >= m_windowStartY && m_vPos < m_windowStopY)
 		{
-			// Apply Modulos for the bitplane pointers.
-			// TODO : figure out the exact conditions for these
-			auto bpl1mod = int16_t(Reg(Register::BPL1MOD) & 0xfffe);
-			auto bpl2mod = int16_t(Reg(Register::BPL2MOD) & 0xfffe);
-			for (int i = 0; i < m_bitplane.numPlanesEnabled; i++)
-			{
-				m_bitplane.ptr[i] += (i & 1) ? bpl2mod : bpl1mod;
-			}
+			m_bpFetchState = BpFetchState::Idle;
 		}
 
 		m_vPos++;
@@ -1009,6 +1003,9 @@ void am::Amiga::Reset()
 	m_hPos = 0;
 	m_lineLength = m_isNtsc ? kNTSC_shortLineLength : kPAL_lineLength;
 	m_frameLength = m_isNtsc ? kNTSC_longFrameLines : kPAL_longFrameLines;
+
+	m_bpFetchState = BpFetchState::Off;
+	m_fetchPos = 0;
 
 	m_windowStartX = 0;
 	m_windowStopX = 0;
@@ -2266,8 +2263,11 @@ void am::Amiga::UpdateScreen()
 			{
 				int loresPixelPos = (xPos * 2 + x / 2);
 
-				int playfieldPtr0 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[0] * 2)) & kPixelBufferMask;
-				int playfieldPtr1 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[1] * 2)) & kPixelBufferMask;
+				int delay0 = ((m_pixelFetchDelay + m_bitplane.playfieldDelay[0]) & 0xf) * 2;
+				int delay1 = ((m_pixelFetchDelay + m_bitplane.playfieldDelay[1]) & 0xf) * 2;
+
+				int playfieldPtr0 = (m_pixelBufferReadPtr + (x - delay0)) & kPixelBufferMask;
+				int playfieldPtr1 = (m_pixelBufferReadPtr + (x - delay1)) & kPixelBufferMask;
 
 				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
@@ -2315,8 +2315,11 @@ void am::Amiga::UpdateScreen()
 			{
 				int loresPixelPos = (xPos * 2 + x);
 
-				int playfieldPtr0 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[0])) & kPixelBufferMask;
-				int playfieldPtr1 = (m_pixelBufferReadPtr + (x - m_bitplane.playfieldDelay[1])) & kPixelBufferMask;
+				int delay0 = ((m_pixelFetchDelay + m_bitplane.playfieldDelay[0]) & 0xf);
+				int delay1 = ((m_pixelFetchDelay + m_bitplane.playfieldDelay[1]) & 0xf);
+
+				int playfieldPtr0 = (m_pixelBufferReadPtr + (x - delay0)) & kPixelBufferMask;
+				int playfieldPtr1 = (m_pixelBufferReadPtr + (x - delay1)) & kPixelBufferMask;
 
 				if (loresPixelPos >= 0 && loresPixelPos < 336)
 				{
@@ -2779,39 +2782,68 @@ bool am::Amiga::DoScanlineDma()
 		return false;
 	}
 
-	// Display DMA only active on lines within the display window
-	const bool inDisplayRange = (m_vPos >= m_windowStartY && m_vPos < m_windowStopY);
-
 	// Sprites can be wiped out by display DMA so check that first
-	if (inDisplayRange && DmaEnabled(Dma::BPLEN))
+	if (m_bpFetchState == BpFetchState::Idle)
 	{
 		auto ddfstrt = Reg(Register::DDFSTRT) & 0b0000000011111100;
-		auto ddfstop = Reg(Register::DDFSTOP) & 0b0000000011111100;
-
 		ddfstrt = std::max(ddfstrt, 0x18);
-		ddfstop = std::min(ddfstop, 0xd8);
-
-		const auto fetchEnd = (ddfstop + 0x8) | (m_bitplane.hires ? 0x4 : 0x0);
-
-		if (m_hPos >= ddfstrt && m_hPos < fetchEnd)
+		if (m_hPos == ddfstrt)
 		{
-			// we are in the fetch zone
+			m_bpFetchState = BpFetchState::Fetching;
+			m_fetchPos = 0;
+			m_pixelFetchDelay = m_bitplane.hires ? 0 : ((m_hPos & 0b100) * 2);
+		}
+	}
 
-			static constexpr uint8_t kPlaneReadOrderLores[8] = { ~0, 3, 5, 1, ~0, 2, 4, 0 };
-			static constexpr uint8_t kPlaneReadOrderHires[4] = { 3, 1, 2, 0 };
+	if (m_bpFetchState == BpFetchState::Fetching || m_bpFetchState == BpFetchState::Finishing)
+	{
+		static constexpr uint8_t kPlaneReadOrderLores[8] = { ~0, 3, 5, 1, ~0, 2, 4, 0 };
+		static constexpr uint8_t kPlaneReadOrderHires[8] = {  3, 1, 2, 0,  3, 1, 2, 0 };
 
-			int bp = m_bitplane.hires
-				? kPlaneReadOrderHires[m_hPos & 0x03]
-				: kPlaneReadOrderLores[m_hPos & 0x07];
+		int bp = m_bitplane.hires
+			? kPlaneReadOrderHires[m_fetchPos]
+			: kPlaneReadOrderLores[m_fetchPos];
 
-			if (bp < m_bitplane.numPlanesEnabled)
+		bool dmaUsed = false;
+
+		if (bp < m_bitplane.numPlanesEnabled)
+		{
+			const auto bplData = ReadChipWord(m_bitplane.ptr[bp]);
+			m_bitplane.ptr[bp] += 2;
+			WriteRegister(uint32_t(Register::BPL1DAT) + (bp << 1), bplData);
+			dmaUsed = true;
+		}
+
+		++m_fetchPos;
+		if (m_fetchPos == 8)
+		{
+			m_fetchPos = 0;
+
+			if (m_bpFetchState == BpFetchState::Finishing)
 			{
-				const auto bplData = ReadChipWord(m_bitplane.ptr[bp]);
-				m_bitplane.ptr[bp] += 2;
-				WriteRegister(uint32_t(Register::BPL1DAT) + (bp << 1), bplData);
-				return true;
+				// Apply Modulos for the bitplane pointers.
+				const auto bpl1mod = int16_t(Reg(Register::BPL1MOD) & 0xfffe);
+				const auto bpl2mod = int16_t(Reg(Register::BPL2MOD) & 0xfffe);
+				for (int i = 0; i < m_bitplane.numPlanesEnabled; i++)
+				{
+					m_bitplane.ptr[i] += (i & 1) ? bpl2mod : bpl1mod;
+				}
+				m_bpFetchState = BpFetchState::Idle;
+			}
+			else
+			{
+				auto ddfstop = Reg(Register::DDFSTOP) & 0b0000000011111100;
+				ddfstop = std::min(ddfstop, 0xd8);
+
+				if ((m_hPos + 1) >= ddfstop)
+				{
+					m_bpFetchState = BpFetchState::Finishing;
+				}
 			}
 		}
+
+		if (dmaUsed)
+			return true;
 	}
 
 	const int spriteStart = m_isNtsc ? 20 : 25;

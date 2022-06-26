@@ -393,6 +393,17 @@ namespace am
 		int m_lineLength = 0;
 		int m_frameLength = 0;
 
+		enum class BpFetchState
+		{
+			Off,		// No fetching on this line.
+			Idle,		// waiting to reach DDFSTRT
+			Fetching,	// between DDFSTRT and DDFSTOP
+			Finishing,	// DDFSTOP reached, do last fetch and apply BPLxMOD
+		};
+
+		BpFetchState m_bpFetchState = BpFetchState::Off;
+		int m_fetchPos = 0;
+
 		int m_windowStartX = 0;
 		int m_windowStopX = 0;
 		int m_windowStartY = 0;
@@ -435,6 +446,7 @@ namespace am
 		std::array<PlayfieldBuffer, 2> m_playfieldBuffer;
 		int m_pixelBufferLoadPtr = 0;
 		int m_pixelBufferReadPtr = 0;
+		int m_pixelFetchDelay = 0;
 
 		std::unique_ptr<ScreenBuffer> m_currentScreen;
 		std::unique_ptr<ScreenBuffer> m_lastScreen;
