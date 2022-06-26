@@ -163,6 +163,11 @@ guru::AmigaApp::~AmigaApp()
 {
 }
 
+void guru::AmigaApp::SetAudioPlayer(am::AudioPlayer* player)
+{
+	m_amiga->SetAudioPlayer(player);
+}
+
 void guru::AmigaApp::SetRunning(bool running)
 {
 	if (m_isRunning == running)

@@ -865,6 +865,53 @@ void am::Amiga::DoOneTick()
 		}
 	}
 
+	// Update Audio
+	for (int i = 0; i < 4; i++)
+	{
+		UpdateAudioChannel(i);
+	}
+
+	if (m_audioBufferCountdown == 0)
+	{
+		m_audioBufferCountdown = 100;
+
+		for (int i = 0; i < 2; i++)
+		{
+			auto& audioBuffer = m_audioBuffer[i];
+			auto pos = m_audioBufferPos * 2;
+			auto channel = i * 2;
+
+			auto GetSample = [this](int channel) -> uint8_t
+			{
+				auto& a = m_audio[channel];
+
+				if (a.volume == 64)
+				{
+					return a.currentSample ^ 0x80;
+				}
+				else
+				{
+					return uint8_t((int32_t(int8_t(a.currentSample)) * int32_t(a.volume) * 4) / 256) ^ 0x80;
+				}
+			};
+
+			audioBuffer[pos + 0] = GetSample(channel + 0);
+			audioBuffer[pos + 1] = GetSample(channel + 1);
+		}
+
+		m_audioBufferPos++;
+		if (m_audioBufferPos == kAudioBufferLength)
+		{
+			if (m_audioPlayer)
+			{
+				m_audioPlayer->AddAudioBuffer(&m_audioBuffer);
+			}
+			m_audioBufferPos = 0;
+		}
+
+	}
+	m_audioBufferCountdown--;
+
 	m_totalCClocks++;
 	m_hPos++;
 
@@ -1002,6 +1049,20 @@ void am::Amiga::Reset()
 	m_diskRotationCountdown = 0;
 
 	m_diskDma = {};
+
+	m_audioBufferCountdown = 0;
+	m_audioBufferPos = 0;
+
+	for (int i = 0; i < 4; i++)
+	{
+		m_audio[i] = {};
+	}
+
+	for (int i = 0; i < 2; i++)
+	{
+		m_audioBuffer[i].clear();
+		m_audioBuffer[i].resize(kAudioBufferLength * 2);
+	}
 
 	m_m68000->Reset(m_cpuBusyTimer);
 
@@ -1643,8 +1704,19 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		break;
 
 	case am::Register::DMACON:
-		UpdateFlagRegister(am::Register::DMACONR, value & 0x87ff);
-		break;
+	{
+		auto dmaconr = UpdateFlagRegister(am::Register::DMACONR, value & 0x87ff);
+
+		for (int i = 0; i < 4; i++)
+		{
+			const bool dmaOn = (dmaconr & (0x1 << i)) != 0;
+
+			if (m_audio[i].dmaOn != dmaOn)
+			{
+				UpdateAudioChannelOnDmaChange(i, dmaOn);
+			}
+		}
+	}	break;
 
 	case am::Register::INTENA:
 		UpdateFlagRegister(am::Register::INTENAR, value);
@@ -1660,6 +1732,43 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	{
 		auto adkconr = UpdateFlagRegister(Register::ADKCONR, value);
 		m_diskDma.useWordSync = (adkconr & 0x0400) != 0;
+	}	break;
+
+	case am::Register::AUD0LCH:
+	case am::Register::AUD1LCH:
+	case am::Register::AUD2LCH:
+	case am::Register::AUD3LCH:
+	case am::Register::AUD0LCL:
+	case am::Register::AUD1LCL:
+	case am::Register::AUD2LCL:
+	case am::Register::AUD3LCL:
+	case am::Register::AUD0LEN:
+	case am::Register::AUD1LEN:
+	case am::Register::AUD2LEN:
+	case am::Register::AUD3LEN:
+	case am::Register::AUD0PER:
+	case am::Register::AUD1PER:
+	case am::Register::AUD2PER:
+	case am::Register::AUD3PER:
+		break;
+
+	case am::Register::AUD0VOL:
+	case am::Register::AUD1VOL:
+	case am::Register::AUD2VOL:
+	case am::Register::AUD3VOL:
+	{
+		const int channel = ((regNum & ~1) - int(am::Register::AUD0VOL)) / 16;
+		const uint8_t volume = std::min(value & 0x007f, 0x40);
+		m_audio[channel].volume = volume;
+	}	break;
+
+	case am::Register::AUD0DAT:
+	case am::Register::AUD1DAT:
+	case am::Register::AUD2DAT:
+	case am::Register::AUD3DAT:
+	{
+		int channel = ((regNum & ~1) - int(am::Register::AUD0DAT)) / 16;
+		UpdateAudioChannelOnData(channel, value);
 	}	break;
 
 	case am::Register::BPL1PTH:
@@ -2663,7 +2772,8 @@ bool am::Amiga::DoScanlineDma()
 		}
 		else
 		{
-			// TODO: Audio DMA
+			const int channel = (m_hPos - 0x0d) / 2;
+			return DoAudioDMA(channel);
 		}
 
 		return false;
@@ -2982,5 +3092,212 @@ void am::Amiga::DoDiskDMA()
 		intreqr |= 0x0002; // set disk block finished interupt
 
 		DoInterruptRequest();
+	}
+}
+
+bool am::Amiga::DoAudioDMA(int channel)
+{
+	auto& audio = m_audio[channel];
+
+	if (!audio.dmaReq)
+		return false;
+
+	audio.dmaReq = false;
+
+	const auto value = ReadChipWord(audio.pointer);
+	audio.pointer += 2;
+
+	WriteRegister(uint32_t(Register::AUD0DAT) + channel * 0x10, value);
+
+	return true;
+}
+
+void am::Amiga::UpdateAudioChannel(int channel)
+{
+	auto& audio = m_audio[channel];
+
+	switch (audio.state)
+	{
+	case 0b000: // idle
+		break;
+
+	case 0b001: // DMA on, waiting for AUDxDAT...
+	case 0b101:
+		break;
+
+	case 0b010: // output high byte
+	{
+		if (audio.perCounter > 1)
+		{
+			audio.perCounter--;
+			return;
+		}
+
+		audio.state = 0b011;
+		audio.currentSample = audio.data & 0xff;
+		audio.perCounter = Reg(am::Register(int(Register::AUD0PER) + channel * 0x10));
+	}	break;
+
+	case 0b011:
+	{
+		if (audio.perCounter > 1)
+		{
+			audio.perCounter--;
+			return;
+		}
+
+		bool activeInt = (Reg(Register::INTREQR) & (0x0080 << channel)) != 0;
+		if (audio.dmaOn || !activeInt)
+		{
+			audio.data = audio.holdingLatch;
+			audio.currentSample = uint8_t(audio.data >> 8);
+			audio.perCounter = Reg(am::Register(int(Register::AUD0PER) + channel * 0x10));
+			audio.state = 0b010;
+			if (audio.dmaOn)
+			{
+				audio.dmaReq = true;
+			}
+			if (!audio.dmaOn || audio.intreq2)
+			{
+				auto& intreqr = Reg(Register::INTREQR);
+				intreqr |= (0x0080 << channel);
+				DoInterruptRequest();
+				audio.intreq2 = false;
+			}
+		}
+		else
+		{
+			// go idle when DMA is off and interrupt has not been serviced
+			audio.state = 0b000;
+		}
+
+	}	break;
+
+	case 0b100:
+	case 0b110:
+	case 0b111:
+		// unused (should not occur?)
+		break;
+	}
+}
+
+void am::Amiga::UpdateAudioChannelOnDmaChange(int channel, bool dmaOn)
+{
+	auto& audio = m_audio[channel];
+
+	switch (audio.state)
+	{
+	case 0b000: // idle
+		if (!dmaOn)
+			DEBUGGER_BREAK(); // Shouldn't happen
+
+		audio.state = 0b001;
+		audio.dmaOn = true;
+		audio.dmaReq = true;
+		audio.lenCounter = Reg(am::Register(int(Register::AUD0LEN) + channel * 0x10));
+		audio.perCounter = Reg(am::Register(int(Register::AUD0PER) + channel * 0x10));
+
+		audio.pointer = 0;
+		audio.pointer = uint32_t(Reg(am::Register(int(Register::AUD0LCH) + channel * 0x10))) << 16;
+		audio.pointer |= Reg(am::Register(int(Register::AUD0LCL) + channel * 0x10));
+		break;
+
+	case 0b001:
+	case 0b101:
+	{
+		if (dmaOn)
+			DEBUGGER_BREAK(); // Shouldn't happen
+
+		// If we turn off dma now, fall back to idle immediately
+		audio.state = 0b000;
+		audio.dmaOn = false;
+	}	break;
+
+	case 0b010:	// main cycle
+	case 0b011:
+		audio.dmaOn = dmaOn;
+		break;
+
+	case 0b100:
+	case 0b110:
+	case 0b111:
+		// unused (should not occur?)
+		break;
+	}
+}
+
+void am::Amiga::UpdateAudioChannelOnData(int channel, uint16_t value)
+{
+	auto& audio = m_audio[channel];
+
+	audio.holdingLatch = value;
+
+	switch (audio.state)
+	{
+
+	case 0b000: // idle
+	{
+		bool activeInt = (Reg(Register::INTREQR) & (0x0080 << channel)) != 0;
+		if (!audio.dmaOn && !activeInt)
+		{
+			audio.state = 0b010;
+			audio.data = audio.holdingLatch;
+			audio.perCounter = Reg(am::Register(int(Register::AUD0PER) + channel * 0x10));
+
+			auto& intreqr = Reg(Register::INTREQR);
+			intreqr |= (0x0080 << channel);
+			DoInterruptRequest();
+		}
+	}	break;
+
+	case 0b001:
+	{
+		assert(audio.dmaOn);
+		if (audio.lenCounter > 1)
+			audio.lenCounter--;
+
+		auto& intreqr = Reg(Register::INTREQR);
+		intreqr |= (0x0080 << channel);
+		DoInterruptRequest();
+
+		audio.state = 0b101;
+		audio.dmaReq = true;
+	}	break;
+
+	case 0b101:
+	{
+		assert(audio.dmaOn);
+		audio.perCounter = Reg(am::Register(int(Register::AUD0PER) + channel * 0x10));
+		audio.data = audio.holdingLatch;
+		audio.dmaReq = true;
+		audio.state = 0b010;
+	}	break;
+
+	case 0b010:	// main cycle
+	case 0b011:
+	{
+		if (audio.dmaOn)
+		{
+			if (audio.lenCounter > 1)
+			{
+				audio.lenCounter--;
+			}
+			else
+			{
+				audio.lenCounter = Reg(am::Register(int(Register::AUD0LEN) + channel * 0x10));
+				audio.pointer = 0;
+				audio.pointer = uint32_t(Reg(am::Register(int(Register::AUD0LCH) + channel * 0x10))) << 16;
+				audio.pointer |= Reg(am::Register(int(Register::AUD0LCL) + channel * 0x10));
+				audio.intreq2 = true;
+			}
+		}
+
+	}	break;
+
+	case 0b100:
+	case 0b110:
+	case 0b111:
+		// unused (should not occur?)
+		break;
 	}
 }

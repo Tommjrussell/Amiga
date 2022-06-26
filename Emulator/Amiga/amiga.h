@@ -2,6 +2,7 @@
 
 #include "68000.h"
 #include "screen_buffer.h"
+#include "audio.h"
 #include "mfm.h"
 
 #include <stdint.h>
@@ -167,10 +168,31 @@ namespace am
 		uint32_t ptr = 0;
 	};
 
+	struct AudioChannel
+	{
+		uint32_t pointer = 0;
+		uint8_t currentSample = 128; // 128 is the 'rest' level.
+		uint8_t volume = 0;
+
+		uint8_t state = 0b000;
+		bool	dmaOn = false;
+		bool	dmaReq = false;
+		bool	intreq2 = false;
+		uint16_t data = 0;
+		uint16_t perCounter = 0;
+		uint16_t holdingLatch = 0; // Next word of data from AUDxDAT
+		uint16_t lenCounter = 0;
+	};
+
 	class Amiga : public cpu::IBus
 	{
 	public:
 		explicit Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom);
+
+		void SetAudioPlayer(am::AudioPlayer* player)
+		{
+			m_audioPlayer = player;
+		}
 
 		uint8_t PeekByte(uint32_t addr) const;
 		uint16_t PeekWord(uint32_t addr) const;
@@ -326,6 +348,11 @@ namespace am
 
 		void TransmitKeyCode();
 
+		bool DoAudioDMA(int channel);
+		void UpdateAudioChannel(int channel);
+		void UpdateAudioChannelOnDmaChange(int channel, bool dmaOn);
+		void UpdateAudioChannelOnData(int channel, uint16_t value);
+
 	private:
 		std::vector<uint8_t> m_rom;
 		std::vector<uint8_t> m_chipRam;
@@ -427,6 +454,13 @@ namespace am
 		int m_keyQueueFront;
 		int m_keyQueueBack;
 		int m_keyCooldown;
+
+		// Audio
+		am::AudioPlayer* m_audioPlayer = nullptr;
+		uint64_t m_audioBufferPos = 0;
+		int m_audioBufferCountdown = 0;
+		AudioChannel m_audio[4];
+		AudioBuffer m_audioBuffer;
 	};
 
 }

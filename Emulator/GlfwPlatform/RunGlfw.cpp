@@ -2,6 +2,7 @@
 #include "App.h"
 
 #include "GlfwPlatform/shader.h"
+#include "GlfwPlatform/audio_openal.h"
 
 #include "amiga/screen_buffer.h"
 
@@ -407,6 +408,10 @@ namespace guru
 		if (!renderer.Init(resourceDir, width, height))
 			return false;
 
+		OpenAlPlayer audioPlayer;
+		audioPlayer.Setup();
+		app.SetAudioPlayer(&audioPlayer);
+
 		renderer.SetInputCallbacks(false);
 
 		bool appRunning = true;
@@ -428,6 +433,8 @@ namespace guru
 			app.Render();
 			renderer.Render(app.UseCrtEmulation());
 		}
+
+		audioPlayer.Shutdown();
 
 		return true;
 	}

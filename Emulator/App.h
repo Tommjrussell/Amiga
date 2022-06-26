@@ -1,6 +1,7 @@
 #pragma once
 
 #include "amiga/screen_buffer.h"
+#include "amiga/audio.h"
 
 #include <memory>
 #include <string>
@@ -66,6 +67,8 @@ namespace guru
 		}
 
 		bool SetDiskImage(int drive, std::string& pathToImage);
+
+		void SetAudioPlayer(am::AudioPlayer* player);
 
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
