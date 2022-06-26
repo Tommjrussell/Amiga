@@ -930,12 +930,6 @@ void am::Amiga::DoOneTick()
 			m_lineLength = kPAL_lineLength;
 		}
 
-		m_bpFetchState = BpFetchState::Off;
-		if (DmaEnabled(Dma::BPLEN) && m_vPos >= m_windowStartY && m_vPos < m_windowStopY)
-		{
-			m_bpFetchState = BpFetchState::Idle;
-		}
-
 		m_vPos++;
 		if (m_vPos == m_frameLength)
 		{
@@ -960,6 +954,12 @@ void am::Amiga::DoOneTick()
 				// TODO : frame length can apparently be forced by modifying the LOF bit in the VPOSW register
 				m_frameLength |= 0b1; // In non-interlaced mode, make sure we are always on a long frame (odd number of lines)
 			}
+		}
+
+		m_bpFetchState = BpFetchState::Off;
+		if (m_vPos >= m_windowStartY && m_vPos < m_windowStopY)
+		{
+			m_bpFetchState = BpFetchState::Idle;
 		}
 
 		if (!m_bitplane.externalResync)
@@ -2783,7 +2783,7 @@ bool am::Amiga::DoScanlineDma()
 	}
 
 	// Sprites can be wiped out by display DMA so check that first
-	if (m_bpFetchState == BpFetchState::Idle)
+	if (DmaEnabled(Dma::BPLEN) && m_bpFetchState == BpFetchState::Idle)
 	{
 		auto ddfstrt = Reg(Register::DDFSTRT) & 0b0000000011111100;
 		ddfstrt = std::max(ddfstrt, 0x18);
