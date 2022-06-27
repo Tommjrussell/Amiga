@@ -2408,15 +2408,28 @@ void am::Amiga::UpdateScreen()
 		auto index = bufferLine * kScreenBufferWidth + (xPos * 4);
 		for (int i = 0; i < valueIndex; i++)
 		{
+			bool drawSprite = false;
+
 			if (spriteValue[i / 2] != 0)
 			{
-				// TODO : Check playfield/sprite priority!
-				(*m_currentScreen.get())[index++] = m_palette[spriteValue[i / 2]];
+				drawSprite = true;
+
+				const int spriteGroup = spriteNum[i / 2] / 2;
+
+				if (pfMask[i] & 1)
+				{
+					if (spriteGroup >= m_bitplane.playfieldSpritePri[0])
+						drawSprite = false;
+				}
+				if (pfMask[i] & 2)
+				{
+					if (spriteGroup >= m_bitplane.playfieldSpritePri[1])
+						drawSprite = false;
+				}
 			}
-			else
-			{
-				(*m_currentScreen.get())[index++] = m_palette[values[i]];
-			}
+
+			const ColourRef col = m_palette[drawSprite ? spriteValue[i / 2] : values[i]];
+			(*m_currentScreen.get())[index++] = col;
 		}
 
 	}
