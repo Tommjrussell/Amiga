@@ -161,6 +161,7 @@ namespace am
 	{
 		bool active = false;
 		bool armed = false;
+		bool attached = false;
 		int8_t drawPos = 0;
 		uint16_t horizontalStart = 0;
 		int startLine = 0;

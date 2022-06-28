@@ -1921,6 +1921,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 			sprite.startLine &= 0x00ff;
 			sprite.startLine |= (value & 0x0004) << 6;
 			sprite.endLine = (value & 0xff00) >> 8 | ((value & 0x0002) << 7);
+			sprite.attached = (value & 0x0080) != 0;
 			sprite.armed = false;
 		}	break;
 
@@ -2367,13 +2368,15 @@ void am::Amiga::UpdateScreen()
 		}
 
 		uint8_t spriteValue[2] = {};
-		uint8_t spriteNum[2] = {};
+		uint8_t spriteNum[2] = {~0, ~0};
 
 		for (int s = 0; s < 8; s++)
 		{
 			auto& sprite = m_sprite[s];
 			if (!sprite.armed)
 				continue;
+
+			const bool attached = m_sprite[s|1].attached; // extract attached status from odd sprite num
 
 			for (int x = 0; x < 2; x++)
 			{
@@ -2385,7 +2388,7 @@ void am::Amiga::UpdateScreen()
 					auto startIndex = m_windowStartX - 0x79;
 
 					// has a higher priority sprite already been written to this pixel?
-					if (loresPixelPos >= startIndex && spriteValue[x] == 0)
+					if (loresPixelPos >= startIndex && s <= spriteNum[x])
 					{
 						const auto sprdata = Reg(Register(int(Register::SPR0DATA) + s * 8));
 						const auto sprdatb = Reg(Register(int(Register::SPR0DATB) + s * 8));
@@ -2394,8 +2397,31 @@ void am::Amiga::UpdateScreen()
 						value = ((sprdata >> (15 - sprite.drawPos)) & 1) | (((sprdatb >> (15 - sprite.drawPos)) << 1) & 2);
 						if (value != 0)
 						{
-							spriteValue[x] = 16 + (s / 2) * 4 + value;
-							spriteNum[x] = s;
+							if (attached)
+							{
+								if ((s & 1) == 0) // even attached sprite
+								{
+									spriteValue[x] = 0x10 | value;
+									spriteNum[x] = s + 1; // set to the num of the next (attached) sprite so it is not masked.
+								}
+								else // odd attached sprite
+								{
+									if (spriteNum[x] == s)
+									{
+										spriteValue[x] |= (value << 2);
+									}
+									else
+									{
+										spriteValue[x] = 0x10 | (value << 2);
+										spriteNum[x] = s;
+									}
+								}
+							}
+							else
+							{
+								spriteValue[x] = 16 + (s / 2) * 4 + value;
+								spriteNum[x] = s;
+							}
 						}
 					}
 
