@@ -25,6 +25,7 @@ namespace guru
 	class CCDebugger;
 	class MemoryEditor;
 	class DiskManager;
+	class LogViewer;
 
 	struct JoystickState
 	{
@@ -91,6 +92,7 @@ namespace guru
 		std::unique_ptr<CCDebugger> m_ccDebugger;
 		std::unique_ptr<MemoryEditor> m_memoryEditor;
 		std::unique_ptr<DiskManager> m_diskManager;
+		std::unique_ptr<LogViewer> m_logViewer;
 
 		enum class InputMode
 		{

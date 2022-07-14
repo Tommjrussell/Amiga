@@ -4,8 +4,10 @@
 
 #include "util/endian.h"
 #include "util/platform.h"
+#include "util/strings.h"
 
 #include <cassert>
+#include <sstream>
 
 
 namespace
@@ -1568,6 +1570,19 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		if (currentlyEnabled && m_diskDma.secondaryDmaEnabled)
 		{
 			StartDiskDMA();
+
+			if (m_logOptions & LogOptions::Disk)
+			{
+				std::stringstream ss;
+				ss << "Disk DMA " << (m_diskDma.useWordSync ? "(synced)" : "(unsynced)")
+					<< " addr=" << util::HexToString(m_m68000->GetCurrentInstructionAddr())
+					<< " : cyl=" << int(m_floppyDrive[0].currCylinder)
+					<< " side=" << int(m_floppyDrive[0].side)
+					<< " len=" << m_diskDma.len
+					<< " start=" << m_diskDma.encodedSequenceCounter;
+
+				m_log.AddMessage(m_totalCClocks, ss.str());
+			}
 		}
 	}	break;
 
@@ -2368,7 +2383,7 @@ void am::Amiga::UpdateScreen()
 		}
 
 		uint8_t spriteValue[2] = {};
-		uint8_t spriteNum[2] = {~0, ~0};
+		uint8_t spriteNum[2] = { uint8_t(~0), uint8_t(~0) };
 
 		for (int s = 0; s < 8; s++)
 		{
@@ -3047,6 +3062,18 @@ void am::Amiga::ProcessDriveCommands(uint8_t data)
 				if (drive.currCylinder > 0)
 					drive.currCylinder--;
 			}
+
+			if (m_logOptions & LogOptions::Disk)
+			{
+				std::stringstream ss;
+				ss << "Disk Stepped "
+					<< " addr=" << util::HexToString(m_m68000->GetCurrentInstructionAddr())
+					<< " cyl=" << int(m_floppyDrive[0].currCylinder)
+					<< " side=" << int(m_floppyDrive[0].side);
+
+				m_log.AddMessage(m_totalCClocks, ss.str());
+			}
+
 		}
 
 		drive.side = side ? 1 : 0;

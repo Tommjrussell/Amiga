@@ -6,6 +6,7 @@
 #include "memory_editor.h"
 #include "disk_manager.h"
 #include "disk_image.h"
+#include "log_viewer.h"
 
 #include "util/file.h"
 #include "util/key_codes.h"
@@ -276,6 +277,14 @@ void guru::AmigaApp::Render()
 				}
 			}
 
+			if (ImGui::MenuItem("Log Viewer", ""))
+			{
+				if (!m_logViewer)
+				{
+					m_logViewer = std::make_unique<LogViewer>(m_amiga.get());
+				}
+			}
+
 			ImGui::Separator();
 
 			if (ImGui::MenuItem("Quit", "ALT+F4"))
@@ -320,6 +329,14 @@ void guru::AmigaApp::Render()
 		if (!m_diskManager->Draw())
 		{
 			m_diskManager.reset();
+		}
+	}
+
+	if (m_logViewer)
+	{
+		if (!m_logViewer->Draw())
+		{
+			m_logViewer.reset();
 		}
 	}
 

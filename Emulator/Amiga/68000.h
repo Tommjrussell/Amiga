@@ -96,6 +96,11 @@ namespace cpu
 			return m_regs.pc;
 		}
 
+		uint32_t GetCurrentInstructionAddr() const
+		{
+			return m_operationAddr;
+		}
+
 		bool InSupervisorMode() const
 		{
 			return (m_regs.status & 0x2000) != 0;

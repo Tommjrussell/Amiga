@@ -5,6 +5,8 @@
 #include "audio.h"
 #include "mfm.h"
 
+#include "util\log.h"
+
 #include <stdint.h>
 #include <tuple>
 #include <vector>
@@ -185,6 +187,13 @@ namespace am
 		uint16_t lenCounter = 0;
 	};
 
+	namespace LogOptions
+	{
+		constexpr int Disk = 1;
+		constexpr int Timer = 2;
+		constexpr int Blitter = 4;
+	}
+
 	class Amiga : public cpu::IBus
 	{
 	public:
@@ -274,6 +283,21 @@ namespace am
 		void SetMouseMove(int x, int y);
 
 		void QueueKeyPress(uint8_t keycode);
+
+		util::Log* GetLog()
+		{
+			return &m_log;
+		}
+
+		void SetLogOptions(int options)
+		{
+			m_logOptions = options;
+		}
+
+		int GetLogOptions() const
+		{
+			return m_logOptions;
+		}
 
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
@@ -474,6 +498,10 @@ namespace am
 		int m_audioBufferCountdown = 0;
 		AudioChannel m_audio[4];
 		AudioBuffer m_audioBuffer;
+
+		// Logging
+		util::Log m_log = util::Log(2048);
+		int m_logOptions = 0;
 	};
 
 }
