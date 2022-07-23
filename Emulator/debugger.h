@@ -9,6 +9,7 @@
 namespace am
 {
 	class Amiga;
+	class Symbols;
 }
 
 namespace guru
@@ -24,6 +25,7 @@ namespace guru
 
 		bool Draw();
 		void OnStartRunning();
+		void SetSymbolsFile(const std::string& symbolsFile);
 
 	private:
 
@@ -40,6 +42,7 @@ namespace guru
 
 		std::unique_ptr<DebuggerMemoryInterface> m_memory;
 		std::unique_ptr<am::Disassembler> m_disassembler;
+		std::unique_ptr<am::Symbols> m_symbols;
 
 		struct DisassemblyLine
 		{
@@ -49,6 +52,7 @@ namespace guru
 		};
 
 		std::vector<DisassemblyLine> m_disassembly;
+		std::string m_symbolsFile;
 
 		guru::AmigaApp* m_app;
 		am::Amiga* m_amiga;

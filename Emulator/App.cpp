@@ -497,3 +497,8 @@ void guru::AmigaApp::ConvertAndSendKeyCode(util::Key key, bool down)
 
 	m_amiga->QueueKeyPress(it->second + (down ? 0 : 0x80));
 }
+
+void guru::AmigaApp::SetSymbolsFile(const std::string& symbolsFile)
+{
+	m_debugger->SetSymbolsFile(symbolsFile);
+}

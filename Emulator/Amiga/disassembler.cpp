@@ -1,5 +1,7 @@
 #include "disassembler.h"
 
+#include "symbols.h"
+
 #include <iterator>
 #include <string.h>
 
@@ -517,25 +519,64 @@ std::string am::Disassembler::Disassemble()
 			{
 				const int16_t displacement = int16_t(m_memory->GetWord(pc));
 				const uint32_t target = pc + displacement;
+
+				const am::Subroutine* currentSub = m_symbols ? m_symbols->GetSub(pc) : nullptr;
+				const am::Subroutine* sub = m_symbols ? m_symbols->GetSub(target) : nullptr;
+
 				pc += 2;
-				const auto count = sprintf_s(buffptr, charsLeft, "%hi -> $%08x", displacement, target);
+
+				int count = sprintf_s(buffptr, charsLeft, "%hi -> $%08x", displacement, target);
 				buffptr += count;
 				charsLeft -= count;
+
+				if (sub && currentSub != sub)
+				{
+					if (target > sub->start)
+					{
+						count = sprintf_s(buffptr, charsLeft, " (%s+%04x)", sub->name.c_str(), target - sub->start);
+					}
+					else
+					{
+						count = sprintf_s(buffptr, charsLeft, " (%s)", sub->name.c_str());
+					}
+					buffptr += count;
+					charsLeft -= count;
+				}
+
 			}	break;
 
 			case CodeType::displacement_optional:
 			{
 				int16_t displacement = int8_t(instruction & 0b00000000'11111111);
 				uint32_t target = pc;
+				const am::Subroutine* currentSub = m_symbols ? m_symbols->GetSub(pc) : nullptr;
 				if (displacement == 0)
 				{
 					displacement = int16_t(m_memory->GetWord(pc));
 					pc += 2;
 				}
 				target += displacement;
-				const auto count = sprintf_s(buffptr, charsLeft, "%hi -> $%08x", displacement, target);
+
+				const am::Subroutine* sub = m_symbols ? m_symbols->GetSub(target) : nullptr;
+
+				int count = sprintf_s(buffptr, charsLeft, "%hi -> $%08x", displacement, target);
 				buffptr += count;
 				charsLeft -= count;
+
+				if (sub && currentSub != sub)
+				{
+					if (target > sub->start)
+					{
+						count = sprintf_s(buffptr, charsLeft, " (%s+%04x)", sub->name.c_str(), target - sub->start);
+					}
+					else
+					{
+						count = sprintf_s(buffptr, charsLeft, " (%s)", sub->name.c_str());
+					}
+					buffptr += count;
+					charsLeft -= count;
+				}
+
 			}	break;
 
 			case CodeType::displacement_data:

@@ -5,6 +5,8 @@
 
 namespace am
 {
+	class Symbols;
+
 	class IMemory
 	{
 	public:
@@ -19,6 +21,11 @@ namespace am
 
 		std::string Disassemble();
 
+		void SetSymbols(Symbols* symbols)
+		{
+			m_symbols = symbols;
+		}
+
 	private:
 		uint32_t GetImmediateValue(int size);
 		void WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft);
@@ -30,6 +37,7 @@ namespace am
 	private:
 
 		IMemory* m_memory;
+		Symbols* m_symbols = nullptr;
 	};
 
 }

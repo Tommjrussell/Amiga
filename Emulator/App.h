@@ -71,6 +71,8 @@ namespace guru
 
 		void SetAudioPlayer(am::AudioPlayer* player);
 
+		void SetSymbolsFile(const std::string& symbolsFile);
+
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
 		void ConvertAndSendKeyCode(util::Key key, bool down);

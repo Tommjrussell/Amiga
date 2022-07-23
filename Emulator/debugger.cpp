@@ -6,6 +6,7 @@
 #include "amiga/amiga.h"
 #include "amiga/68000.h"
 #include "amiga/registers.h"
+#include "amiga/symbols.h"
 
 #include "util/strings.h"
 #include "util/imgui_extras.h"
@@ -42,11 +43,19 @@ guru::Debugger::Debugger(guru::AmigaApp* app, am::Amiga* amiga)
 	, m_amiga(amiga)
 {
 	m_memory = std::make_unique<DebuggerMemoryInterface>(amiga);
+	m_symbols = std::make_unique<am::Symbols>();
 	m_disassembler = std::make_unique<am::Disassembler>(m_memory.get());
+	m_disassembler->SetSymbols(m_symbols.get());
 }
 
 guru::Debugger::~Debugger()
 {
+}
+
+void guru::Debugger::SetSymbolsFile(const std::string& symbolsFile)
+{
+	m_symbolsFile = symbolsFile;
+	m_symbols->Load(m_symbolsFile);
 }
 
 void guru::Debugger::OnStartRunning()
@@ -123,6 +132,14 @@ bool guru::Debugger::Draw()
 		m_disassembly.clear();
 	}
 
+	ImGui::SameLine();
+
+	if (ImGui::Button("Reload Symbols"))
+	{
+		m_symbols->Load(m_symbolsFile);
+		m_disassembly.clear();
+	}
+
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
 		ImGui::BeginChild("Child_Disassembly", ImVec2(0, 0), true, 0);
@@ -143,6 +160,14 @@ bool guru::Debugger::Draw()
 
 			for (auto& d : m_disassembly)
 			{
+				auto sub = m_symbols->GetSub(d.addr);
+				if (sub && sub->start == d.addr)
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0xEE, 0x44, 0, 255));
+					ImGui::Text(sub->name.c_str());
+					ImGui::PopStyleColor();
+				}
+
 				if (d.addr == pc)
 				{
 					ImGui::Selectable(d.text.c_str(), true);
@@ -213,12 +238,36 @@ void guru::Debugger::UpdateAssembly()
 		m_disassemblyStart = earliestAddr;
 	}
 
+	uint32_t disassemblyStop = 0;
+
+	if (m_symbols)
+	{
+		auto sub = m_symbols->GetSub(m_trackPc ? pc : m_disassemblyStart);
+		if (sub)
+		{
+			if (sub->start < m_disassemblyStart)
+			{
+				m_disassemblyStart = sub->start;
+				disassemblyStop = sub->end;
+			}
+		}
+	}
+
 	m_disassembler->pc = m_disassemblyStart;
 
 	bool snapToPc = (m_disassemblyStart > pc);
 
-	for (int lines = 0; lines < 48; lines++)
+	for (int lines = 0; ; lines++)
 	{
+		if (lines >= 48)
+		{
+			if (disassemblyStop == 0)
+				break;
+
+			if (m_disassembler->pc > disassemblyStop)
+				break;
+		}
+
 		bool onPc = (m_disassembler->pc == pc);
 		if (onPc && !snapToPc)
 		{
