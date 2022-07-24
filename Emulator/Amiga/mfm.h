@@ -13,6 +13,7 @@ namespace am
 	const int kMfmSectorHeaderSize = 64;
 	const int kMfmGapSize = 30;
 	const int kMfmSectorSize = kMfmSectorHeaderSize + kDecodedBytesPerSector * 2;
+	const uint16_t kGapPattern = 0x5050;
 
 	using DiskImage = std::vector<std::vector<std::vector<uint8_t>>>;
 

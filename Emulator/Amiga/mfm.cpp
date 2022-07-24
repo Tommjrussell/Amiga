@@ -134,7 +134,12 @@ void am::EncodeDiskImage(const std::vector<uint8_t>& data, DiskImage& encodedIma
 				AddSyncBits(syncStartPtr, ptr);
 			}
 
-			ptr += kMfmGapSize;
+			// Certain programs (e.g. first samurai) seem to expect some bits set in the sector gap.
+			// So write out an arbitrary pattern.
+			for (int i = 0; i < kMfmGapSize; i += 2)
+			{
+				WriteWord(ptr, kGapPattern);
+			}
 		}
 	}
 }
