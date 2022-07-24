@@ -178,6 +178,7 @@ namespace cpu
 		bool Opcode_trap(int& delay);
 		bool Opcode_addx(int& delay);
 		bool Opcode_subx(int& delay);
+		bool Opcode_trapv(int& delay);
 
 	private:
 

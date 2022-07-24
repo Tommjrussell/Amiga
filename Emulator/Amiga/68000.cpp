@@ -361,7 +361,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_stop,				//	stop
 	&M68000::Opcode_rte,				//	rte
 	&M68000::Opcode_rts,				//	rts
-	&M68000::UnimplementOpcode,			//	trapv
+	&M68000::Opcode_trapv,				//	trapv
 	&M68000::UnimplementOpcode,			//	rtr
 	&M68000::Opcode_jsr,				//	jsr     {ea}
 	&M68000::Opcode_jmp,				//	jmp     {ea}
@@ -2561,6 +2561,17 @@ bool M68000::Opcode_trap(int& delay)
 	const auto v = 32 + (m_operation & 0b00000000'00001111);
 	StartInternalException(v);
 	delay += 5;
+	return true;
+}
+
+bool M68000::Opcode_trapv(int& delay)
+{
+	if (m_regs.status & Overflow)
+	{
+		m_bus->ReadBusWord(m_regs.pc); // pre-fetch of next word (ignored)
+		StartInternalException(7);
+		delay += 5;
+	}
 	return true;
 }
 
