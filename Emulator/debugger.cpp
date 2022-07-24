@@ -150,9 +150,11 @@ bool guru::Debugger::Draw()
 		}
 		else
 		{
+			bool recentre = false;
 			if (m_disassembly.empty())
 			{
 				UpdateAssembly();
+				recentre = m_trackPc;
 			}
 
 			auto cpu = m_amiga->GetCpu();
@@ -170,6 +172,12 @@ bool guru::Debugger::Draw()
 
 				if (d.addr == pc)
 				{
+					if (recentre)
+					{
+						ImGui::SetScrollHereY(0.5f);
+						recentre = false;
+					}
+
 					ImGui::Selectable(d.text.c_str(), true);
 				}
 				else
@@ -248,8 +256,8 @@ void guru::Debugger::UpdateAssembly()
 			if (sub->start < m_disassemblyStart)
 			{
 				m_disassemblyStart = sub->start;
-				disassemblyStop = sub->end;
 			}
+			disassemblyStop = sub->end;
 		}
 	}
 
@@ -467,7 +475,7 @@ void guru::Debugger::DrawControls()
 		{
 			if (ptr == 0)
 			{
-				ptr = history->size();
+				ptr = uint32_t(history->size());
 			}
 			ptr--;
 

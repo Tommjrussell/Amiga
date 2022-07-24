@@ -354,12 +354,17 @@ void am::Amiga::SetPC(uint32_t pc)
 void am::Amiga::SetBreakpoint(uint32_t addr)
 {
 	m_breakpoint = addr;
+	if (addr == m_m68000->GetPC())
+	{
+		m_breakpointSetAfter = true;
+	}
 	m_breakpointEnabled = true;
 }
 
 void am::Amiga::ClearBreakpoint()
 {
 	m_breakpointEnabled = false;
+	m_breakpointSetAfter = false;
 	m_breakAtLine = false;
 }
 
@@ -768,9 +773,16 @@ void am::Amiga::DoOneTick()
 	{
 		if (m_breakAtNextInstruction || (m_breakpointEnabled && m_m68000->GetPC() == m_breakpoint))
 		{
-			m_breakAtNextInstruction = false;
-			m_running = false;
-			return;
+			if (!m_breakAtNextInstruction && m_breakpointSetAfter)
+			{
+				m_breakpointSetAfter = false;
+			}
+			else
+			{
+				m_breakAtNextInstruction = false;
+				m_running = false;
+				return;
+			}
 		}
 
 		if (m_breakAtAddressChanged)
@@ -1562,6 +1574,18 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		// Writing to this register will start the DMA if enabled bit is already set.
 		const bool currentlyEnabled = m_diskDma.secondaryDmaEnabled;
 
+		if (m_diskDma.inProgress && (m_logOptions & LogOptions::Disk))
+		{
+			std::stringstream ss;
+			ss << "Disk DMA aborted"
+				<< " cmd=" << util::HexToString(m_m68000->GetCurrentInstructionAddr())
+				<< " : ptr=" << util::HexToString(m_diskDma.ptr)
+				<< " remaining=" << util::HexToString(uint16_t(m_diskDma.len))
+				<< " pos=" << m_diskDma.encodedSequenceCounter;
+
+			m_log.AddMessage(m_totalCClocks, ss.str());
+		}
+
 		m_diskDma.secondaryDmaEnabled = (value & 0x8000) != 0;
 		m_diskDma.writing = (value & 0x4000) != 0;
 		m_diskDma.len = (value & 0x3fff);
@@ -1574,11 +1598,11 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 			if (m_logOptions & LogOptions::Disk)
 			{
 				std::stringstream ss;
-				ss << "Disk DMA " << (m_diskDma.useWordSync ? "(synced)" : "(unsynced)")
-					<< " addr=" << util::HexToString(m_m68000->GetCurrentInstructionAddr())
-					<< " : cyl=" << int(m_floppyDrive[0].currCylinder)
-					<< " side=" << int(m_floppyDrive[0].side)
-					<< " len=" << m_diskDma.len
+				ss << "Disk DMA" << (m_diskDma.useWordSync ? " (sync)" : "")
+					<< " cmd=" << util::HexToString(m_m68000->GetCurrentInstructionAddr())
+					<< " : trk=" << int(m_floppyDrive[0].currCylinder) << "/" << int(m_floppyDrive[0].side)
+					<< " to=" << util::HexToString(m_diskDma.ptr)
+					<< " len=" << util::HexToString(uint16_t(m_diskDma.len))
 					<< " start=" << m_diskDma.encodedSequenceCounter;
 
 				m_log.AddMessage(m_totalCClocks, ss.str());
@@ -3168,16 +3192,25 @@ void am::Amiga::DoDiskDMA()
 	}
 	else
 	{
-		auto& drive = m_floppyDrive[m_driveSelected];
-		auto& disk = m_floppyDisk[m_driveSelected];
-		auto& track = disk.image[drive.currCylinder][drive.side];
+		uint16_t value = 0;
 
-		uint16_t value = track[m_diskDma.encodedSequenceCounter];
-		value <<= 8;
-		m_diskDma.encodedSequenceCounter = (m_diskDma.encodedSequenceCounter + 1) % track.size();
-		value |= uint16_t(track[m_diskDma.encodedSequenceCounter]);
-		m_diskDma.encodedSequenceCounter = (m_diskDma.encodedSequenceCounter + 1) % track.size();
+		// Disk DMA continues even when drive is unselected or motor is switched off (reads zeros).
 
+		if (m_driveSelected > -1)
+		{
+			auto& drive = m_floppyDrive[m_driveSelected];
+			if (drive.motorOn)
+			{
+				auto& disk = m_floppyDisk[m_driveSelected];
+				auto& track = disk.image[drive.currCylinder][drive.side];
+
+				value = track[m_diskDma.encodedSequenceCounter];
+				value <<= 8;
+				m_diskDma.encodedSequenceCounter = (m_diskDma.encodedSequenceCounter + 1) % track.size();
+				value |= uint16_t(track[m_diskDma.encodedSequenceCounter]);
+				m_diskDma.encodedSequenceCounter = (m_diskDma.encodedSequenceCounter + 1) % track.size();
+			}
+		}
 		WriteChipWord(m_diskDma.ptr, value);
 		m_diskDma.ptr += 2;
 	}
@@ -3185,6 +3218,11 @@ void am::Amiga::DoDiskDMA()
 	m_diskDma.len--;
 	if (m_diskDma.len == 0)
 	{
+		if (m_logOptions & LogOptions::Disk)
+		{
+			m_log.AddMessage(m_totalCClocks, "Disk DMA Finished.");
+		}
+
 		m_diskDma.inProgress = false;
 		auto& intreqr = Reg(Register::INTREQR);
 		intreqr |= 0x0002; // set disk block finished interupt

@@ -434,6 +434,7 @@ namespace am
 		int m_windowStartY = 0;
 		int m_windowStopY = 0;
 
+		bool m_breakpointSetAfter = false;
 		uint32_t m_breakpoint  = 0;
 		uint32_t m_breakAtRegister = 0;
 		uint32_t m_breakAtLineNum = 0;
