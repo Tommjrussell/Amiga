@@ -391,7 +391,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_bitwise,			//	eor.{s}   D{REG}, {ea}
 	&M68000::Opcode_mulu,				//	mulu    {ea}, D{REG}
 	&M68000::Opcode_muls,				//	muls    {ea}, D{REG}
-	&M68000::UnimplementOpcode,			//	abcd    {m}
+	&M68000::Opcode_abcd,				//	abcd    {m}
 	&M68000::Opcode_exg,				//	exg     reg, reg
 	&M68000::Opcode_bitwise,			//	and.{s}   {ea}, D{REG}
 	&M68000::Opcode_bitwise,			//	and.{s}   D{REG}, {ea}
@@ -2655,6 +2655,67 @@ bool M68000::Opcode_subx(int& delay)
 	}
 
 	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
+
+	return true;
+}
+
+bool M68000::Opcode_abcd(int& delay)
+{
+	const auto dReg = (m_operation & 0b00001110'00000000) >> 9;
+	const auto sReg = (m_operation & 0b00000000'00000111);
+
+	const bool memMode = (m_operation & 0b1000) != 0;
+
+	const uint64_t extend = (m_regs.status & Extend) ? 1 : 0;
+	const uint16_t zero = (m_regs.status & Zero);
+
+	uint64_t sourceVal;
+	uint64_t destVal;
+	uint32_t destAddr;
+
+	if (memMode)
+	{
+		const uint32_t sourceAddr = GetReg(m_regs.a[sReg], 4) - 1;
+		destAddr = GetReg(m_regs.a[dReg], 4) - 1;
+		SetReg(m_regs.a[sReg], 4, sourceAddr);
+		SetReg(m_regs.a[dReg], 4, destAddr);
+
+		sourceVal = ReadBus(sourceAddr, 1);
+		destVal = ReadBus(destAddr, 1);
+	}
+	else
+	{
+		sourceVal = GetReg(m_regs.d[sReg], 1);
+		destVal = GetReg(m_regs.d[dReg], 1);
+	}
+
+	const bool halfCarry = ((sourceVal & 0xf) + (destVal & 0xf) + extend) > 0xf;
+
+	destVal = AluAdd(sourceVal, destVal, extend, 1, AllFlags);
+
+	uint64_t corf = 0;
+	if (halfCarry || (destVal & 0xf) > 9)
+	{
+		corf = 0x06;
+	}
+	if (destVal > 0x99 || (m_regs.status & Carry))
+	{
+		corf |= 0x60;
+	}
+
+	destVal = AluAdd(destVal, corf, 0, 1, AllFlags);
+
+	if (memMode)
+	{
+		WriteBus(destAddr, 1, uint32_t(destVal));
+	}
+	else
+	{
+		SetReg(m_regs.d[dReg], 1, uint32_t(destVal));
+	}
+
+	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
+	delay += 1;
 
 	return true;
 }
