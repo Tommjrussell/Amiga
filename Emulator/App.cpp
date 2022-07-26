@@ -6,6 +6,7 @@
 #include "memory_editor.h"
 #include "disk_manager.h"
 #include "disk_image.h"
+#include "disk_activity.h"
 #include "log_viewer.h"
 
 #include "util/file.h"
@@ -153,6 +154,7 @@ guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
 
 	m_debugger = std::make_unique<Debugger>(this, m_amiga.get());
 	m_ccDebugger = std::make_unique<CCDebugger>(this, m_amiga.get());
+	m_diskActivity = std::make_unique<DiskActivity>(m_amiga.get());
 
 	for (int i = 0; i < _countof(kStandardKeyMapping); i++)
 	{
@@ -240,8 +242,10 @@ bool guru::AmigaApp::Update()
 	return !m_isQuitting;
 }
 
-void guru::AmigaApp::Render()
+void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 {
+	m_diskActivity->Draw(displayWidth, displayHeight);
+
 	if (m_inputMode == InputMode::EmulatorHasFocus)
 		return;
 

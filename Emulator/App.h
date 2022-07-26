@@ -26,6 +26,7 @@ namespace guru
 	class MemoryEditor;
 	class DiskManager;
 	class LogViewer;
+	class DiskActivity;
 
 	struct JoystickState
 	{
@@ -46,7 +47,7 @@ namespace guru
 		const am::ScreenBuffer* GetScreen() const;
 
 		bool Update();
-		void Render();
+		void Render(int displayWidth, int displayHeight);
 
 		bool UseCrtEmulation() const
 		{
@@ -94,6 +95,7 @@ namespace guru
 		std::unique_ptr<CCDebugger> m_ccDebugger;
 		std::unique_ptr<MemoryEditor> m_memoryEditor;
 		std::unique_ptr<DiskManager> m_diskManager;
+		std::unique_ptr<DiskActivity> m_diskActivity;
 		std::unique_ptr<LogViewer> m_logViewer;
 
 		enum class InputMode

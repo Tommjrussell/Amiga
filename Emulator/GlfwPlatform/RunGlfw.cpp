@@ -62,7 +62,20 @@ namespace guru
 		void DrawScreen(int screenWidth, int screenHeight, bool useCrtEmulation, bool evenFrame, int magAmount);
 		void HandleInput();
 
-		GLFWwindow* GetWindow() { return m_window; }
+		int Width() const
+		{
+			return m_displayWidth;
+		}
+
+		int Height() const
+		{
+			return m_displayHeight;
+		}
+
+		GLFWwindow* GetWindow()
+		{
+			return m_window;
+		}
 
 		void NewFrame();
 		void Render(bool useCrtEmulation);
@@ -430,7 +443,7 @@ namespace guru
 
 			renderer.SetScreenImage(app.GetScreen());
 			renderer.NewFrame();
-			app.Render();
+			app.Render(renderer.Width(), renderer.Height());
 			renderer.Render(app.UseCrtEmulation());
 		}
 

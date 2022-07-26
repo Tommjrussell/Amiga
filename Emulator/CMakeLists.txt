@@ -28,6 +28,7 @@ add_executable (AmigaEmulator
 	"memory_editor.cpp" "memory_editor.h"
 	"disk_manager.h" "disk_manager.cpp"
 	"disk_image.h" "disk_image.cpp"
+	"disk_activity.h" "disk_activity.cpp"
 	"log_viewer.h" "log_viewer.cpp"
 	"amiga/amiga.cpp" "amiga/amiga.h"
 	"amiga/disassembler.cpp" "amiga/disassembler.h"
