@@ -180,6 +180,7 @@ namespace cpu
 		bool Opcode_subx(int& delay);
 		bool Opcode_trapv(int& delay);
 		bool Opcode_abcd(int& delay);
+		bool Opcode_chk(int& delay);
 
 	private:
 

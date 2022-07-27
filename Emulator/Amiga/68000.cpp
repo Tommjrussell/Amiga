@@ -368,7 +368,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_movem,				//	movem.{wl} {list}, {ea}
 	&M68000::Opcode_movem,				//	movem.{wl} {ea}, {list}
 	&M68000::Opcode_lea,				//	lea     {ea}, A{REG}
-	&M68000::UnimplementOpcode,			//	chk     {ea}, D{REG}
+	&M68000::Opcode_chk,				//	chk     {ea}, D{REG}
 	&M68000::Opcode_dbcc,				//	db{cc}    D{reg}, {braDisp}
 	&M68000::Opcode_scc,				//	s{cc}     {ea}
 	&M68000::Opcode_addq,				//	addq.{s}  {q}, {ea}
@@ -2717,5 +2717,31 @@ bool M68000::Opcode_abcd(int& delay)
 	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
 	delay += 1;
 
+	return true;
+}
+
+bool M68000::Opcode_chk(int& delay)
+{
+	const auto reg = (m_operation & 0b00001110'00000000) >> 9;
+	const auto regVal = int16_t(GetReg(m_regs.d[reg], 2));
+
+	uint64_t eaValue;
+	if (!GetEaValue(m_ea[0], 2, eaValue))
+	{
+		return false;
+	}
+
+	SetFlag(Overflow|Carry, false);
+	SetFlag(Zero, regVal == 0);
+
+	if (regVal < 0 || regVal > int16_t(eaValue))
+	{
+		SetFlag(Negative, regVal < 0);
+		m_bus->ReadBusWord(m_regs.pc); // pre-fetch of next word (ignored)
+		StartInternalException(6);
+		delay += 5;
+	}
+
+	delay += 3;
 	return true;
 }
