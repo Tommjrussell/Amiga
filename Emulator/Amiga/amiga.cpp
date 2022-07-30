@@ -3181,7 +3181,9 @@ void am::Amiga::UpdateFloppyDriveFlags()
 		}
 		else
 		{
-			SetFlag(m_cia[0].pra, 0x20, true); // id data (report as amiga drive (all 1s))
+			// id data (report as amiga drive (all 1s))
+			// Note: line must be driven low for a '1'
+			SetFlag(m_cia[0].pra, 0x20, false);
 		}
 	}
 }
