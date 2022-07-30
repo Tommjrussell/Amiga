@@ -691,12 +691,13 @@ void am::Amiga::WriteBusByte(uint32_t addr, uint8_t value)
 		{
 			if ((addr & 0x03f000) == 0x03f000)
 			{
-				// Do we need to handle this?
-				DEBUGGER_BREAK();
+				// Not sure exactly how this should work. I'm guessing that the whole
+				// register is written and the other byte of the word is just zeros.
+				uint16_t wordValue = (addr & 1) ? uint16_t(value) : uint16_t(value) << 8;
+				const auto regNum = addr & 0x000ffe;
+				WriteRegister(regNum, wordValue);
 			}
 		}
-
-		// TODO : implement register/peripheral access
 	}
 }
 
