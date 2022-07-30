@@ -687,6 +687,14 @@ void am::Amiga::WriteBusByte(uint32_t addr, uint8_t value)
 				WriteCIA(1, port, value);
 			}
 		}
+		else if (type == Mapped::ChipRegisters)
+		{
+			if ((addr & 0x03f000) == 0x03f000)
+			{
+				// Do we need to handle this?
+				DEBUGGER_BREAK();
+			}
+		}
 
 		// TODO : implement register/peripheral access
 	}
@@ -1528,14 +1536,25 @@ uint16_t am::Amiga::ReadRegister(uint32_t regNum)
 	const auto& regInfo = registerInfo[regIndex];
 	assert(regInfo.addr == (regNum & ~1));
 
-	if (regInfo.type != RegType::ReadOnly)
-	{
-		return 0x0000;
-	}
-
 	if (m_breakOnRegisterEnabled && regNum == m_breakAtRegister)
 	{
 		m_breakAtNextInstruction = true;
+	}
+
+	if (regInfo.type == RegType::Strobe)
+	{
+		// Reading to strobe a register (rather than writing) is rare
+		// but is done by Bubble Bobble (at least)
+		StrobeRegister(regNum);
+
+		// Not sure what value is 'read' from a strobe register but for
+		// now assume it is always 0.
+		return 0x0000;
+	}
+
+	if (regInfo.type != RegType::ReadOnly)
+	{
+		return 0x0000;
 	}
 
 	const auto value = m_registers[regIndex];
@@ -1551,13 +1570,19 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	const auto& regInfo = registerInfo[regIndex];
 	assert(regInfo.addr == (regNum & ~1));
 
-	if (regInfo.type != RegType::WriteOnly && regInfo.type != RegType::Strobe)
-		return;
-
 	if (m_breakOnRegisterEnabled && regNum == m_breakAtRegister)
 	{
 		m_breakAtNextInstruction = true;
 	}
+
+	if (regInfo.type == RegType::Strobe)
+	{
+		StrobeRegister(regNum);
+		return;
+	}
+
+	if (regInfo.type != RegType::WriteOnly)
+		return;
 
 	m_registers[regIndex] = value;
 
@@ -1685,44 +1710,6 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	case am::Register::COP2LCH:
 	case am::Register::COP2LCL:
 		break;
-
-	case am::Register::COPJMP1:
-	{
-		m_copper.pc = uint32_t(Reg(Register::COP1LCH) & 0b00000000'00011111) << 16
-			| Reg(Register::COP1LCL);
-		if (m_copper.state == CopperState::Stopped || m_copper.state == CopperState::Waiting)
-		{
-			m_copper.state = CopperState::Read;
-			if (m_breakAtNextCopperInstruction)
-			{
-				m_breakAtNextCopperInstruction = false;
-				m_running = false;
-			}
-		}
-		else if (m_copper.state == CopperState::WaitSkip)
-		{
-			m_copper.state = CopperState::Abort;
-		}
-	}	break;
-
-	case am::Register::COPJMP2:
-	{
-		m_copper.pc = uint32_t(Reg(Register::COP2LCH) & 0b00000000'00011111) << 16
-			| Reg(Register::COP2LCL);
-		if (m_copper.state == CopperState::Stopped || m_copper.state == CopperState::Waiting)
-		{
-			m_copper.state = CopperState::Read;
-			if (m_breakAtNextCopperInstruction)
-			{
-				m_breakAtNextCopperInstruction = false;
-				m_running = false;
-			}
-		}
-		else if (m_copper.state == CopperState::WaitSkip)
-		{
-			m_copper.state = CopperState::Abort;
-		}
-	}	break;
 
 	case am::Register::DIWSTRT:
 		m_windowStartX = value & 0x00ff;
@@ -2026,6 +2013,59 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	break;
 
 	// TODO : Implement Register behaviour
+
+	default:
+		if (m_breakOnRegisterEnabled && m_breakAtRegister == 0xffff'ffff)
+		{
+			// Special value for breaking at unimplemented registers
+			m_breakAtNextInstruction = true;
+		}
+		break;
+	}
+}
+
+void am::Amiga::StrobeRegister(uint32_t regNum)
+{
+	switch (am::Register(regNum & ~1))
+	{
+
+	case am::Register::COPJMP1:
+	{
+		m_copper.pc = uint32_t(Reg(Register::COP1LCH) & 0b00000000'00011111) << 16
+			| Reg(Register::COP1LCL);
+		if (m_copper.state == CopperState::Stopped || m_copper.state == CopperState::Waiting)
+		{
+			m_copper.state = CopperState::Read;
+			if (m_breakAtNextCopperInstruction)
+			{
+				m_breakAtNextCopperInstruction = false;
+				m_running = false;
+			}
+		}
+		else if (m_copper.state == CopperState::WaitSkip)
+		{
+			m_copper.state = CopperState::Abort;
+		}
+	}	break;
+
+	case am::Register::COPJMP2:
+	{
+		m_copper.pc = uint32_t(Reg(Register::COP2LCH) & 0b00000000'00011111) << 16
+			| Reg(Register::COP2LCL);
+		if (m_copper.state == CopperState::Stopped || m_copper.state == CopperState::Waiting)
+		{
+			m_copper.state = CopperState::Read;
+			if (m_breakAtNextCopperInstruction)
+			{
+				m_breakAtNextCopperInstruction = false;
+				m_running = false;
+			}
+		}
+		else if (m_copper.state == CopperState::WaitSkip)
+		{
+			m_copper.state = CopperState::Abort;
+		}
+	}	break;
 
 	default:
 		if (m_breakOnRegisterEnabled && m_breakAtRegister == 0xffff'ffff)

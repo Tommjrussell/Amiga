@@ -334,6 +334,7 @@ namespace am
 
 		uint16_t ReadRegister(uint32_t regNum);
 		void WriteRegister(uint32_t regNum, uint16_t value);
+		void StrobeRegister(uint32_t regNum);
 
 		void DoInterruptRequest();
 
