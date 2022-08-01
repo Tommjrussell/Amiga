@@ -24,7 +24,7 @@ namespace guru
 		~Debugger();
 
 		bool Draw();
-		void OnStartRunning();
+		void Refresh();
 		void SetSymbolsFile(const std::string& symbolsFile);
 
 	private:

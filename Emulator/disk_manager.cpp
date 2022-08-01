@@ -42,7 +42,7 @@ bool guru::DiskManager::Draw()
 
 	for (int i = 0; i < 4; i++)
 	{
-		auto& diskName = m_amiga->GetDisk(i);
+		auto& diskName = m_amiga->GetDiskName(i);
 
 		ImGui::BeginChild(driveNameLabels[i], ImVec2(640, 60), true, 0);
 		ImGui::Text(driveNameLabels[i]);
@@ -93,13 +93,15 @@ bool guru::DiskManager::Draw()
 		std::vector<uint8_t> image;
 		std::string name;
 
-		bool ok = LoadDiskImage(m_fileDialog->GetSelected(), image, name);
+		auto file = m_fileDialog->GetSelected();
+
+		bool ok = LoadDiskImage(file, {}, image, name);
 
 		m_loadFailed[m_selectedDrive] = !ok;
 
 		if (ok)
 		{
-			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, name, std::move(image));
+			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, file.generic_u8string(), name, std::move(image));
 		}
 
 		m_fileDialog->ClearSelected();

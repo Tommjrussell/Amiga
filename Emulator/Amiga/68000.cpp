@@ -1,5 +1,7 @@
 #include "68000.h"
 
+#include "util/stream.h"
+
 #include <functional>
 #include <utility>
 
@@ -2745,3 +2747,25 @@ bool M68000::Opcode_chk(int& delay)
 	delay += 3;
 	return true;
 }
+
+template <typename S>
+void M68000::Stream(S& s)
+{
+	using util::Stream;
+
+	Stream(s, m_regs);
+	Stream(s, m_executeState);
+	Stream(s, m_operationAddr);
+	Stream(s, m_currentInstructionIndex);
+	Stream(s, m_immediateValue);
+	Stream(s, m_interruptControl);
+	Stream(s, m_operation);
+	Stream(s, m_opcodeSize);
+	Stream(s, m_ea[0]);
+	Stream(s, m_ea[1]);
+	Stream(s, m_operationHistory);
+	Stream(s, m_operationHistoryPtr);
+}
+
+template void M68000::Stream<>(std::istream& s);
+template void M68000::Stream<>(std::ostream& s);

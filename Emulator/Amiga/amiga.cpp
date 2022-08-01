@@ -5,6 +5,7 @@
 #include "util/endian.h"
 #include "util/platform.h"
 #include "util/strings.h"
+#include "util/stream.h"
 
 #include <cassert>
 #include <sstream>
@@ -3007,22 +3008,29 @@ bool am::Amiga::DoScanlineDma()
 	return false;
 }
 
-const std::string& am::Amiga::GetDisk(int driveNum) const
+const std::string& am::Amiga::GetDiskName(int driveNum) const
 {
 	assert(driveNum >= 0 && driveNum < 4);
-	return m_floppyDisk[driveNum].fileId;
+	return m_floppyDisk[driveNum].displayName;
 }
 
-bool am::Amiga::SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& data)
+const std::string& am::Amiga::GetDiskFilename(int driveNum) const
+{
+	assert(driveNum >= 0 && driveNum < 4);
+	return m_floppyDisk[driveNum].fileLocation;
+}
+
+bool am::Amiga::SetDisk(int driveNum, const std::string& filename, const std::string& displayName, std::vector<uint8_t>&& data)
 {
 	assert(driveNum >= 0 && driveNum < 4);
 
-	if (fileId.empty() || data.empty())
+	if (filename.empty() || data.empty())
 		return false;
 
 	auto& disk = m_floppyDisk[driveNum];
 
-	disk.fileId = fileId;
+	disk.fileLocation = filename;
+	disk.displayName = displayName;
 	disk.data = std::move(data);
 
 	EncodeDiskImage(disk.data, disk.image);
@@ -3037,7 +3045,8 @@ void am::Amiga::EjectDisk(int driveNum)
 	if (IsDiskInserted(driveNum))
 	{
 		auto& disk = m_floppyDisk[driveNum];
-		disk.fileId.clear();
+		disk.displayName.clear();
+		disk.fileLocation.clear();
 		disk.data.clear();
 		disk.image.clear();
 
@@ -3479,4 +3488,124 @@ void am::Amiga::UpdateAudioChannelOnData(int channel, uint16_t value)
 		// unused (should not occur?)
 		break;
 	}
+}
+
+namespace
+{
+	constexpr char shapshotMagicValue[] = "GuRuAmi";
+	constexpr int shapshotVersion = 0x01;
+}
+
+void am::Amiga::WriteSnapshot(std::ostream& os) const
+{
+	using util::Stream;
+
+	Stream(os, shapshotMagicValue);
+	Stream(os, shapshotVersion);
+
+	const_cast<Amiga*>(this)->Stream(os);
+}
+
+bool am::Amiga::ReadSnapshot(std::istream& is)
+{
+	char magicValue[8];
+
+	using util::Stream;
+
+	Stream(is, magicValue);
+	if (strncmp(magicValue, shapshotMagicValue, sizeof magicValue))
+	{
+		return false;
+	}
+
+	int version;
+	Stream(is, version);
+
+	if (version != shapshotVersion)
+		return false;
+
+	this->Stream(is);
+
+	return true;
+}
+
+template <typename S>
+void am::Amiga::Stream(S& s)
+{
+	m_m68000->Stream(s);
+
+	using util::Stream;
+	using util::StreamVector;
+
+	Stream(s, m_romOverlayEnabled);
+	Stream(s, m_isNtsc);
+	Stream(s, m_running);
+	Stream(s, m_rightMouseButtonDown);
+
+	Stream(s, m_bitplane);
+
+	Stream(s, m_vPos);
+	Stream(s, m_hPos);
+	Stream(s, m_lineLength);
+	Stream(s, m_frameLength);
+
+	Stream(s, m_bpFetchState);
+	Stream(s, m_fetchPos);
+
+	Stream(s, m_windowStartX);
+	Stream(s, m_windowStopX);
+	Stream(s, m_windowStartY);
+	Stream(s, m_windowStopY);
+
+	Stream(s, m_sharedBusRws);
+	Stream(s, m_exclusiveBusRws);
+
+	Stream(s, m_timerCountdown);
+
+	Stream(s, m_totalCClocks);
+	Stream(s, m_cpuBusyTimer);
+
+	Stream(s, m_copper);
+
+	Stream(s, m_blitter);
+
+	Stream(s, m_blitterCountdown);
+
+	Stream(s, m_cia[0]);
+	Stream(s, m_cia[1]);
+
+	Stream(s, m_palette);
+
+	Stream(s, m_pixelBufferLoadPtr);
+	Stream(s, m_pixelBufferReadPtr);
+	Stream(s, m_pixelFetchDelay);
+
+	for (int i = 0; i < 8; i++)
+	{
+		Stream(s, m_sprite[i]);
+	}
+
+	for (int i = 0; i < 4; i++)
+	{
+		Stream(s, m_floppyDrive[i]);
+	}
+
+	Stream(s, m_driveSelected);
+	Stream(s, m_diskRotationCountdown);
+
+	Stream(s, m_diskDma);
+
+	Stream(s, m_keyQueue);
+	Stream(s, m_keyQueueFront);
+	Stream(s, m_keyQueueBack);
+	Stream(s, m_keyCooldown);
+
+	for (int i = 0; i < 4; i++)
+	{
+		Stream(s, m_audio[i]);
+	}
+
+	StreamVector(s, m_registers);
+	StreamVector(s, m_chipRam);
+	StreamVector(s, m_slowRam);
 }

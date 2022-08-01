@@ -5,6 +5,7 @@
 #include <numeric>
 #include <string>
 #include <algorithm>
+#include <utility>
 
 namespace util
 {
@@ -53,5 +54,20 @@ namespace util
 		auto res = s.find(end);
 
 		return (off == res);
+	}
+
+	inline std::pair<std::string_view, std::string_view> SplitOn(std::string_view s, std::string_view splitToken)
+	{
+		auto pos = s.find(splitToken);
+
+		if (pos == std::string_view::npos)
+		{
+			return std::make_pair(s, std::string_view{});
+		}
+
+		auto first = s.substr(0, pos);
+		auto second = s.substr(pos + splitToken.length());
+
+		return std::make_pair(first, second);
 	}
 }

@@ -8,7 +8,7 @@
 
 namespace
 {
-	bool LoadZippedImage(const std::string& zipFilename, std::vector<uint8_t>& image, std::string& adfName)
+	bool LoadZippedImage(const std::string& zipFilename, std::string_view archFile, std::vector<uint8_t>& image, std::string& adfName)
 	{
 		unzFile zipfile = unzOpen(zipFilename.c_str());
 		if (!zipfile)
@@ -38,7 +38,19 @@ namespace
 			}
 
 			std::string file = filename;
-			if (util::EndsWith(util::ToUpper(file), ".ADF"))
+
+			bool match = false;
+
+			if (archFile.empty())
+			{
+				match = util::EndsWith(util::ToUpper(file), ".ADF");
+			}
+			else
+			{
+				match = (archFile == file);
+			}
+
+			if (match)
 			{
 				if (unzOpenCurrentFile(zipfile) != UNZ_OK)
 					return false;
@@ -68,7 +80,7 @@ namespace
 
 } // namespace
 
-bool guru::LoadDiskImage(const std::filesystem::path& path, std::vector<uint8_t>& image, std::string& name)
+bool guru::LoadDiskImage(const std::filesystem::path& path, std::string_view archFile, std::vector<uint8_t>& image, std::string& name)
 {
 	name = path.filename().generic_u8string();
 
@@ -77,7 +89,7 @@ bool guru::LoadDiskImage(const std::filesystem::path& path, std::vector<uint8_t>
 	if (util::ToUpper(path.extension().string()) == ".ZIP")
 	{
 		std::string zippedFile;
-		isGood = LoadZippedImage(path.string(), image, zippedFile);
+		isGood = LoadZippedImage(path.string(), archFile, image, zippedFile);
 
 		name += "::";
 		name += zippedFile;

@@ -142,7 +142,8 @@ namespace am
 
 	struct FloppyDisk
 	{
-		std::string fileId;
+		std::string displayName;
+		std::string fileLocation;
 		std::vector<uint8_t> data;
 		DiskImage image;
 	};
@@ -269,13 +270,14 @@ namespace am
 			return m_frameLength;
 		}
 
-		const std::string& GetDisk(int driveNum) const;
-		bool SetDisk(int driveNum, const std::string& fileId, std::vector<uint8_t>&& diskImage);
+		const std::string& GetDiskName(int driveNum) const;
+		const std::string& GetDiskFilename(int driveNum) const;
+		bool SetDisk(int driveNum, const std::string& filename, const std::string& displayName, std::vector<uint8_t>&& diskImage);
 		void EjectDisk(int driveNum);
 
 		bool IsDiskInserted(int driveNum) const
 		{
-			return !m_floppyDisk[driveNum].fileId.empty();
+			return !m_floppyDisk[driveNum].fileLocation.empty();
 		}
 
 		void SetControllerButton(int controller, int button, bool pressed);
@@ -299,6 +301,9 @@ namespace am
 			return m_logOptions;
 		}
 
+		void WriteSnapshot(std::ostream& os) const;
+		bool ReadSnapshot(std::istream& is);
+
 	public:
 		virtual uint16_t ReadBusWord(uint32_t addr) override final;
 		virtual void WriteBusWord(uint32_t addr, uint16_t value) override final;
@@ -306,6 +311,9 @@ namespace am
 		virtual void WriteBusByte(uint32_t addr, uint8_t value) override final;
 
 	private:
+
+		template <typename S>
+		void Stream(S& s);
 
 		uint16_t ReadChipWord(uint32_t addr) const;
 		void WriteChipWord(uint32_t addr, uint16_t value);

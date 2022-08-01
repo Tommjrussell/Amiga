@@ -8,6 +8,7 @@
 #include <vector>
 #include <chrono>
 #include <map>
+#include <filesystem>
 
 namespace util
 {
@@ -77,6 +78,12 @@ namespace guru
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
 		void ConvertAndSendKeyCode(util::Key key, bool down);
+
+		std::filesystem::path GetLocalAppDir() const;
+		std::filesystem::path GetOrCreateLocalAppDir() const;
+
+		void LoadSnapshot(const std::filesystem::path& file);
+		void SaveSnapshot(const std::filesystem::path& file);
 
 	private:
 		bool m_isQuitting = false;

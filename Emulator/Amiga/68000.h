@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 #include <array>
+#include <istream>
+#include <ostream>
 
 namespace cpu
 {
@@ -120,6 +122,12 @@ namespace cpu
 		}
 
 		void SetInterruptControl(int intLevel);
+
+		template <typename S>
+		void Stream(S& s);
+
+		void WriteToStream(std::ostream& os) const;
+		void ReadFromStream(std::istream& is);
 
 	private:
 

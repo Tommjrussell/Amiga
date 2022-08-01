@@ -11,9 +11,13 @@
 
 #include "util/file.h"
 #include "util/key_codes.h"
+#include "util/strings.h"
+#include "util/stream.h"
+#include "util/platform.h"
 
 #include <imgui.h>
 #include <memory>
+#include <fstream>
 #include <filesystem>
 
 namespace
@@ -181,22 +185,24 @@ void guru::AmigaApp::SetRunning(bool running)
 
 	if (running)
 	{
-		m_debugger->OnStartRunning();
+		m_debugger->Refresh();
 	}
 }
 
 bool guru::AmigaApp::SetDiskImage(int drive, std::string& pathToImage)
 {
-	std::filesystem::path path(pathToImage);
+	auto[file, archFile] = util::SplitOn(pathToImage, "::");
+
+	std::filesystem::path path(file);
 
 	std::vector<uint8_t> image;
 	std::string name;
 
-	bool ok = LoadDiskImage(path, image, name);
+	bool ok = LoadDiskImage(path, archFile, image, name);
 
 	if (ok)
 	{
-		ok = m_amiga->SetDisk(drive, name, std::move(image));
+		ok = m_amiga->SetDisk(drive, pathToImage, name, std::move(image));
 	}
 
 	return ok;
@@ -287,6 +293,22 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 				{
 					m_logViewer = std::make_unique<LogViewer>(m_amiga.get());
 				}
+			}
+
+			ImGui::Separator();
+
+			if (ImGui::MenuItem("Quick Load Snapshot ", ""))
+			{
+				auto path = GetLocalAppDir();
+				path /= "snap.bin";
+				LoadSnapshot(path);
+			}
+
+			if (ImGui::MenuItem("Quick Save Snapshot ", ""))
+			{
+				auto path = GetOrCreateLocalAppDir();
+				path /= "snap.bin";
+				SaveSnapshot(path);
 			}
 
 			ImGui::Separator();
@@ -505,4 +527,56 @@ void guru::AmigaApp::ConvertAndSendKeyCode(util::Key key, bool down)
 void guru::AmigaApp::SetSymbolsFile(const std::string& symbolsFile)
 {
 	m_debugger->SetSymbolsFile(symbolsFile);
+}
+
+std::filesystem::path guru::AmigaApp::GetLocalAppDir() const
+{
+	auto appPath = util::GetLocalDataDirectory();
+	appPath /= "Guru Amiga";
+	return appPath;
+}
+
+std::filesystem::path guru::AmigaApp::GetOrCreateLocalAppDir() const
+{
+	auto appPath = GetLocalAppDir();
+	std::filesystem::create_directory(appPath);
+	return appPath;
+}
+
+void guru::AmigaApp::LoadSnapshot(const std::filesystem::path& file)
+{
+	std::ifstream ifile(file, std::ios::binary);
+	if (!ifile.is_open())
+		return;
+
+	if (!m_amiga->ReadSnapshot(ifile))
+		return;
+
+	for (int i = 0; i < 4; i++)
+	{
+		std::string fileLocation;
+		util::StreamString(ifile, fileLocation);
+
+		if (fileLocation != m_amiga->GetDiskFilename(i))
+		{
+			SetDiskImage(i, fileLocation);
+		}
+	}
+
+	m_debugger->Refresh();
+}
+
+void guru::AmigaApp::SaveSnapshot(const std::filesystem::path& file)
+{
+	std::ofstream ofile(file, std::ios::out | std::ios::binary);
+	if (!ofile.is_open())
+		return;
+
+	m_amiga->WriteSnapshot(ofile);
+
+	for (int i = 0; i < 4; i++)
+	{
+		util::StreamString(ofile, m_amiga->GetDiskFilename(i));
+	}
+
 }

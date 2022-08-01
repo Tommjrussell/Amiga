@@ -58,7 +58,7 @@ void guru::Debugger::SetSymbolsFile(const std::string& symbolsFile)
 	m_symbols->Load(m_symbolsFile);
 }
 
-void guru::Debugger::OnStartRunning()
+void guru::Debugger::Refresh()
 {
 	m_disassembly.clear();
 }
