@@ -2573,7 +2573,7 @@ void am::Amiga::UpdateScreen()
 			}
 			else
 			{
-				col = m_palette[values[i]];
+				col = m_palette[values[i] & 0x3f];
 			}
 
 			if (drawSprite)
@@ -2652,6 +2652,97 @@ namespace
 	}
 }
 
+namespace
+{
+	// Lookup tables for appying inclusive and exclusive
+	// fill algorithms to a nibble of data.
+
+	uint8_t inFill[2][16] =
+	{
+		// without carry in
+		{
+			0b0'0000,	// 0000
+			0b1'1111,	// 0001
+			0b1'1110,	// 0010
+			0b0'0011,	// 0011
+			0b1'1100,	// 0100
+			0b0'0111,	// 0101
+			0b0'0110,	// 0110
+			0b1'1111,	// 0111
+			0b1'1000,	// 1000
+			0b0'1111,	// 1001
+			0b0'1110,	// 1010
+			0b1'1011,	// 1011
+			0b1'1100,	// 1100
+			0b1'1111,	// 1101
+			0b1'1110,	// 1110
+			0b0'1111,	// 1111
+		},
+		// with carry in
+		{
+			0b1'1111,	// 0000
+			0b0'0001,	// 0001
+			0b0'0011,	// 0010
+			0b1'1111,	// 0011
+			0b0'0111,	// 0100
+			0b1'1101,	// 0101
+			0b1'1111,	// 0110
+			0b0'0111,	// 0111
+			0b0'1111,	// 1000
+			0b1'1001,	// 1001
+			0b1'1011,	// 1010
+			0b0'1111,	// 1011
+			0b1'1111,	// 1100
+			0b0'1101,	// 1101
+			0b0'1111,	// 1110
+			0b1'1111,	// 1111
+		}
+	};
+
+	uint8_t exFill[2][16] =
+	{
+		// without carry in
+		{
+			0b0'0000,	// 0000
+			0b1'1111,	// 0001
+			0b1'1110,	// 0010
+			0b0'0001,	// 0011
+			0b1'1100,	// 0100
+			0b0'0011,	// 0101
+			0b0'0010,	// 0110
+			0b1'1101,	// 0111
+			0b1'1000,	// 1000
+			0b0'0111,	// 1001
+			0b0'0110,	// 1010
+			0b1'1001,	// 1011
+			0b0'0100,	// 1100
+			0b1'1011,	// 1101
+			0b1'1010,	// 1110
+			0b0'0101,	// 1111
+		},
+		// with carry in
+		{
+			0b1'1111,	// 0000
+			0b0'0000,	// 0001
+			0b0'0001,	// 0010
+			0b1'1110,	// 0011
+			0b0'0011,	// 0100
+			0b1'1100,	// 0101
+			0b1'1101,	// 0110
+			0b0'0010,	// 0111
+			0b0'0111,	// 1000
+			0b1'1000,	// 1001
+			0b1'1001,	// 1010
+			0b0'0110,	// 1011
+			0b1'1011,	// 1100
+			0b0'0100,	// 1101
+			0b0'0101,	// 1110
+			0b1'1010,	// 1111
+		}
+	};
+
+}
+
 void am::Amiga::DoInstantBlitter()
 {
 	const auto con0 = Reg(Register::BLTCON0);
@@ -2706,8 +2797,9 @@ void am::Amiga::DoInstantBlitter()
 		m_blitter.firstWordMask = Reg(Register::BLTAFWM);
 		m_blitter.lastWordMask = Reg(Register::BLTALWM);
 
-		auto exclusiveFill = (con1 & 0x0010) != 0;
-		auto inclusiveFill = (con1 & 0x0008) != 0;
+		const int fillMode = (con1 >> 3) & 0b11;
+		auto* fillTable = (fillMode == 1) ? inFill : exFill;
+		const int lineFillCarryIn = (con1 >> 2) & 0b1;
 
 		uint32_t addTo = descendingMode ? -2 : 2;
 
@@ -2720,6 +2812,8 @@ void am::Amiga::DoInstantBlitter()
 
 		for (auto l = 0; l < m_blitter.lines; l++)
 		{
+			int carryIn = lineFillCarryIn;
+
 			for (auto w = 0; w < m_blitter.wordsPerLine; w++)
 			{
 				for (auto c = 0; c < 3; c++)
@@ -2776,16 +2870,29 @@ void am::Amiga::DoInstantBlitter()
 				bShiftIn = savedB;
 
 				res = DoBlitterFunction(m_blitter.minterm, aData, bData, m_blitter.data[0]);
+
+				if (res != 0)
+				{
+					dmaconr &= ~0x2000;
+				}
+
+				if (fillMode != 0)
+				{
+					// Apply the area fill algorithm, a nibble at a time
+					for (int s = 0; s < 16; s += 4)
+					{
+						auto fill = fillTable[carryIn][(res >> s) & 0x0f];
+						res &= ~(0xf << s);
+						res |= (fill & 0xf) << s;
+						carryIn = (fill >> 4) & 1;
+					}
+				}
+
 				if (m_blitter.enabled[3])
 				{
 					resQueued = true;
 					resAddr = m_blitter.ptr[3] & 0xffff'fffe;
 					m_blitter.ptr[3] += addTo;
-				}
-
-				if (res != 0)
-				{
-					dmaconr &= ~0x2000;
 				}
 			}
 
@@ -2907,6 +3014,7 @@ void am::Amiga::DoInstantBlitter()
 		m_blitterCountdown = blitClks;
 	}
 }
+#pragma optimize("", on)
 
 bool am::Amiga::DoScanlineDma()
 {
