@@ -1262,6 +1262,7 @@ bool am::CIA::Timer::Tick()
 {
 	if (running)
 	{
+		--value;
 		if (value == 0)
 		{
 			value = latchedValue;
@@ -1272,10 +1273,6 @@ bool am::CIA::Timer::Tick()
 			}
 
 			return true;
-		}
-		else
-		{
-			value--;
 		}
 	}
 	return false;
