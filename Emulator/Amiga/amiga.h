@@ -420,6 +420,7 @@ namespace am
 			uint8_t playfieldDelay[2] = {};
 			uint8_t playfieldSpritePri[2] = {};
 			uint32_t ptr[6] = {};
+			ColourRef heldCol = 0;
 		} m_bitplane;
 
 		int m_vPos = 0;

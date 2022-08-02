@@ -1817,7 +1817,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 	case am::Register::BPLCON0:
 		m_bitplane.hires = ((value & 0x8000) != 0);
 		m_bitplane.numPlanesEnabled = (value & 0x7000) >> 12;
-		m_bitplane.ham = ((value & 0x0800) != 0);
+		m_bitplane.ham = ((value & 0x8C00) == 0x0800);
 		m_bitplane.doublePlayfield = (value & 0x0400) != 0;
 		m_bitplane.compositeColourEnabled = ((value & 0x0200) != 0);
 		m_bitplane.genlockAudioEnabled = ((value & 0x0100) != 0);
@@ -2535,7 +2535,52 @@ void am::Amiga::UpdateScreen()
 				}
 			}
 
-			const ColourRef col = m_palette[drawSprite ? spriteValue[i / 2] : values[i]];
+			ColourRef col;
+
+			if (m_bitplane.ham)
+			{
+				const uint32_t sel = (values[i] >> 4) & 0b11;
+				const uint32_t mod = values[i] & 0xf;
+
+				auto& heldCol = m_bitplane.heldCol;
+
+				switch (sel)
+				{
+				case 0b00: // new palette colour
+					heldCol = m_palette[mod];
+					break;
+
+				case 0b01: // new blue channel value
+					heldCol &= 0xff00ffff;
+					heldCol |= mod << 16;
+					heldCol |= mod << 20;
+					break;
+
+				case 0b10: // new red channel value
+					heldCol &= 0xffffff00;
+					heldCol |= mod;
+					heldCol |= mod << 4;
+					break;
+
+				case 0b11: // new green channel value
+					heldCol &= 0xffff00ff;
+					heldCol |= mod << 8;
+					heldCol |= mod << 12;
+					break;
+				}
+
+				col = heldCol;
+			}
+			else
+			{
+				col = m_palette[values[i]];
+			}
+
+			if (drawSprite)
+			{
+				col = m_palette[spriteValue[i / 2]];
+			}
+
 			(*m_currentScreen.get())[index++] = col;
 		}
 
