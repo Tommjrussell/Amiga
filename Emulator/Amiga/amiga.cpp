@@ -3014,7 +3014,6 @@ void am::Amiga::DoInstantBlitter()
 		m_blitterCountdown = blitClks;
 	}
 }
-#pragma optimize("", on)
 
 bool am::Amiga::DoScanlineDma()
 {
