@@ -1,6 +1,9 @@
 #pragma once
 
 #include <memory>
+#include <vector>
+#include <string>
+#include <filesystem>
 
 namespace ImGui
 {
@@ -28,5 +31,7 @@ namespace guru
 
 		bool m_loadFailed[4] = {};
 		int m_selectedDrive = 0;
+		std::filesystem::path m_selectedFile;
+		std::vector<std::string> m_archiveFiles;
 	};
 }

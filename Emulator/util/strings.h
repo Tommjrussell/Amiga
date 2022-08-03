@@ -39,12 +39,12 @@ namespace util
 		return s;
 	}
 
-	inline bool BeginsWith(const std::string& s, const std::string& start)
+	inline bool BeginsWith(std::string_view s, std::string_view start)
 	{
 		return (0 == s.find(start));
 	}
 
-	inline bool EndsWith(const std::string& s, const std::string& end)
+	inline bool EndsWith(std::string_view s, std::string_view end)
 	{
 		if (end.length() > s.length())
 			return false;

@@ -68,17 +68,67 @@ namespace
 					return false;
 
 				adfName = file;
-				break;
+				return true;
 			}
 
 			if (unzGoToNextFile(zipfile) != UNZ_OK)
 				break;
 		}
 
-		return true;
+		return false;
 	}
 
 } // namespace
+
+bool guru::IsArchive(const std::filesystem::path& path)
+{
+	return (util::ToUpper(path.extension().string()) == ".ZIP");
+}
+
+std::vector<std::string> guru::ListFilesFromZip(const std::filesystem::path& zipPath, std::string_view extension)
+{
+	unzFile zipfile = unzOpen(zipPath.string().c_str());
+	if (!zipfile)
+		return {};
+
+	auto zipguard = util::make_scope_guard([&]()
+		{
+			unzClose(zipfile);
+		});
+
+	if (unzGoToFirstFile(zipfile) != UNZ_OK)
+		return {};
+
+	char filename[512];
+
+	std::vector<std::string> files;
+
+	for (;;)
+	{
+		unz_file_info file_info;
+		if (unzGetCurrentFileInfo(
+			zipfile,
+			&file_info,
+			filename,
+			_countof(filename),
+			NULL, 0, NULL, 0) != UNZ_OK)
+		{
+			return {};
+		}
+
+		std::string file = filename;
+
+		if (util::EndsWith(util::ToUpper(file), extension))
+		{
+			files.emplace_back(std::move(file));
+		}
+
+		if (unzGoToNextFile(zipfile) != UNZ_OK)
+			break;
+	}
+
+	return files;
+}
 
 bool guru::LoadDiskImage(const std::filesystem::path& path, std::string_view archFile, std::vector<uint8_t>& image, std::string& name)
 {
@@ -86,7 +136,7 @@ bool guru::LoadDiskImage(const std::filesystem::path& path, std::string_view arc
 
 	bool isGood = false;
 
-	if (util::ToUpper(path.extension().string()) == ".ZIP")
+	if (IsArchive(path))
 	{
 		std::string zippedFile;
 		isGood = LoadZippedImage(path.string(), archFile, image, zippedFile);

@@ -9,9 +9,6 @@
 #include <imgui.h>
 #include "3rd Party/imfilebrowser.h"
 
-#include <vector>
-#include <string>
-
 guru::DiskManager::DiskManager(am::Amiga* amiga)
 	: m_amiga(amiga)
 {
@@ -88,23 +85,74 @@ bool guru::DiskManager::Draw()
 
 	m_fileDialog->Display();
 
-	if (m_fileDialog->HasSelected())
+	auto LoadDiskFile = [this](const std::filesystem::path& file, std::string_view archFile)
 	{
 		std::vector<uint8_t> image;
 		std::string name;
-
-		auto file = m_fileDialog->GetSelected();
-
-		bool ok = LoadDiskImage(file, {}, image, name);
-
+		bool ok = LoadDiskImage(file, archFile, image, name);
 		m_loadFailed[m_selectedDrive] = !ok;
 
 		if (ok)
 		{
 			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, file.generic_u8string(), name, std::move(image));
 		}
+	};
+
+	if (m_fileDialog->HasSelected())
+	{
+		m_selectedFile = m_fileDialog->GetSelected();
+
+		if (IsArchive(m_selectedFile))
+		{
+			m_archiveFiles = ListFilesFromZip(m_selectedFile, ".ADF");
+			if (m_archiveFiles.empty())
+			{
+				// No ADFs in the archive.
+				m_loadFailed[m_selectedDrive] = true;
+			}
+			else if (m_archiveFiles.size() == 1)
+			{
+				LoadDiskFile(m_selectedFile, m_archiveFiles.front());
+			}
+			else
+			{
+				ImGui::OpenPopup("Select File...");
+			}
+		}
+		else
+		{
+			LoadDiskFile(m_selectedFile, {});
+		}
 
 		m_fileDialog->ClearSelected();
+	}
+
+	if (ImGui::BeginPopupModal("Select File...", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::Text("Choose file from archive:");
+		ImGui::PushItemWidth(480);
+		if (ImGui::BeginListBox("##file selection"))
+		{
+			for (auto& file : m_archiveFiles)
+			{
+				bool selected = false;
+				if (ImGui::Selectable(file.c_str(), &selected))
+				{
+					LoadDiskFile(m_selectedFile, file);
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			ImGui::EndListBox();
+		}
+		ImGui::PopItemWidth();
+
+		if (ImGui::Button("Cancel", ImVec2(120, 0)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SetItemDefaultFocus();
+
+		ImGui::EndPopup();
 	}
 
 	return true;
