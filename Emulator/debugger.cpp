@@ -375,6 +375,11 @@ void guru::Debugger::DrawCpuRegisters()
 	ImGui::InputInt("Int Mask", &intMask, 0, 0, ImGuiInputTextFlags_ReadOnly);
 	ImGui::PopItemWidth();
 
+	ImGui::NextColumn();
+	bool trace = (regs.status & 0x8000) != 0;
+	ImGui::Checkbox("Trace", &trace);
+
+
 	ImGui::EndChild();
 	ImGui::PopStyleVar(2);
 }

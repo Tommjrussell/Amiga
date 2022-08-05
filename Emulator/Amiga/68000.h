@@ -246,6 +246,7 @@ namespace cpu
 		int m_interruptControl = 0;
 		uint16_t m_operation;
 		uint8_t m_opcodeSize = 0;
+		bool m_tracedOperation = false;
 
 		EA m_ea[2];
 

@@ -458,7 +458,7 @@ bool M68000::DecodeOneInstruction(int& delay)
 	{
 		StartInternalException(24 + m_interruptControl);
 
-		delay += 12;
+		delay += 8;
 
 		m_regs.status &= 0b11111000'11111111;
 		m_regs.status |= (m_interruptControl & 0x7) << 8;
@@ -468,6 +468,9 @@ bool M68000::DecodeOneInstruction(int& delay)
 	// returns false on illegal instruction
 
 	m_executeState = ExecuteState::ReadyToExecute;
+
+	// Set whether trace will trigger after this instruction completes.
+	m_tracedOperation = (m_regs.status & 0x8000) != 0;
 
 	m_operationAddr = m_regs.pc;
 
@@ -910,6 +913,15 @@ bool M68000::ExecuteOneInstruction(int& delay)
 	}
 	else if (m_executeState == ExecuteState::ReadyToExecute)
 	{
+		// If this instruction started with the trace bit set,
+		// we now call the trace exception.
+		if (m_tracedOperation)
+		{
+			m_tracedOperation = false;
+			StartInternalException(9);
+			delay += 3;
+		}
+
 		m_executeState = ExecuteState::ReadyToDecode;
 	}
 
@@ -919,11 +931,12 @@ bool M68000::ExecuteOneInstruction(int& delay)
 bool M68000::StartInternalException(uint8_t vectorNum)
 {
 	// * Switches to supervisor mode if not already in it
+	// * Clears the trace bit
 	// * Pushes pc and status to the stack
 	// * Sets pc to address at exception vector index specified
 
 	uint16_t status = m_regs.status;
-	SetStatusRegister(m_regs.status | 0x2000);
+	SetStatusRegister((m_regs.status | 0x2000) & 0x7fff);
 	auto& sp = m_regs.a[7];
 
 	// Push current PC to stack
