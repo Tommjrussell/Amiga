@@ -364,7 +364,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_rte,				//	rte
 	&M68000::Opcode_rts,				//	rts
 	&M68000::Opcode_trapv,				//	trapv
-	&M68000::UnimplementOpcode,			//	rtr
+	&M68000::Opcode_rtr,				//	rtr
 	&M68000::Opcode_jsr,				//	jsr     {ea}
 	&M68000::Opcode_jmp,				//	jmp     {ea}
 	&M68000::Opcode_movem,				//	movem.{wl} {list}, {ea}
@@ -1925,6 +1925,21 @@ bool M68000::Opcode_rts(int& delay)
 	m_bus->ReadBusWord(m_regs.pc); // ignored (pre-fetch of next instruction)
 	m_regs.pc = ReadBusLong(m_regs.a[7]);
 	m_regs.a[7] += 4;
+
+	return true;
+}
+
+bool M68000::Opcode_rtr(int& delay)
+{
+	auto& sp = m_regs.a[7];
+
+	m_bus->ReadBusWord(m_regs.pc); // ignored (pre-fetch of next instruction)
+	uint16_t sr = m_bus->ReadBusWord(sp);
+	m_regs.status &= 0xff00;
+	m_regs.status |= (sr & 0x00ff);
+	sp += 2;
+	m_regs.pc = ReadBusLong(sp);
+	sp += 4;
 
 	return true;
 }
