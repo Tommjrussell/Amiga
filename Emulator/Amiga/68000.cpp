@@ -525,7 +525,7 @@ bool M68000::DecodeOneInstruction(int& delay)
 		{
 			m_regs.pc = m_operationAddr;
 			m_currentInstructionIndex = kNumOpcodeEntries; // used to indicate illegal instruction
-			return false;
+			return true;
 		}
 	}	break;
 
@@ -591,9 +591,6 @@ bool M68000::DecodeOneInstruction(int& delay)
 		}
 	};
 
-	bool hasEa1 = (decodeCode & kEffectiveAddress1) != 0;
-	bool hasEa2 = (decodeCode & kEffectiveAddress2) != 0;
-
 	if ((decodeCode & kEffectiveAddress1) != 0)
 	{
 		const uint32_t mode = (m_operation >> 3) & 0x7;
@@ -605,7 +602,7 @@ bool M68000::DecodeOneInstruction(int& delay)
 			// illegal ea mode
 			m_regs.pc = m_operationAddr;
 			m_currentInstructionIndex = kNumOpcodeEntries; // used to indicate illegal instruction
-			return false;
+			return true;
 		}
 
 		m_ea[0] = DecodeEffectiveAddress(mode, xn, m_opcodeSize, delay);
