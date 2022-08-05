@@ -380,7 +380,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_moveq,				//	moveq   {data}, D{REG}
 	&M68000::Opcode_divu,				//	divu    {ea:w}, D{REG}
 	&M68000::Opcode_divs,				//	divs    {ea:w}, D{REG}
-	&M68000::UnimplementOpcode,			//	sbcd    {m}
+	&M68000::Opcode_sbcd,				//	sbcd    {m}
 	&M68000::Opcode_bitwise,			//	or.{s}    {ea}, D{REG}
 	&M68000::Opcode_bitwise,			//	or.{s}    D{REG}, {ea}
 	&M68000::Opcode_suba,				//	suba.{WL}  {ea}, A{REG}
@@ -2717,6 +2717,58 @@ bool M68000::Opcode_abcd(int& delay)
 	}
 
 	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
+	delay += 1;
+
+	return true;
+}
+
+bool M68000::Opcode_sbcd(int& delay)
+{
+	const auto dReg = (m_operation & 0b00001110'00000000) >> 9;
+	const auto sReg = (m_operation & 0b00000000'00000111);
+
+	const bool memMode = (m_operation & 0b1000) != 0;
+
+	const uint64_t extend = (m_regs.status & Extend) ? 1 : 0;
+	const uint16_t zero = (m_regs.status & Zero);
+
+	uint64_t sourceVal;
+	uint64_t destVal;
+	uint32_t destAddr;
+
+	if (memMode)
+	{
+		const uint32_t sourceAddr = GetReg(m_regs.a[sReg], 4) - 1;
+		destAddr = GetReg(m_regs.a[dReg], 4) - 1;
+		SetReg(m_regs.a[sReg], 4, sourceAddr);
+		SetReg(m_regs.a[dReg], 4, destAddr);
+
+		sourceVal = ReadBus(sourceAddr, 1);
+		destVal = ReadBus(destAddr, 1);
+	}
+	else
+	{
+		sourceVal = GetReg(m_regs.d[sReg], 1);
+		destVal = GetReg(m_regs.d[dReg], 1);
+	}
+
+	uint64_t result = destVal - sourceVal - extend;
+
+	uint64_t carry = ((~destVal & (sourceVal | result)) | (sourceVal & result)) & 0x88;
+	uint64_t corf = carry - (carry >> 2);
+	result = AluSub(result, corf, 0, 1, AllFlags);
+
+	if (memMode)
+	{
+		WriteBus(destAddr, 1, uint32_t(result));
+	}
+	else
+	{
+		SetReg(m_regs.d[dReg], 1, uint32_t(result));
+	}
+
+	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
+	SetFlag(Carry|Extend, ((carry & 0x80) != 0));
 	delay += 1;
 
 	return true;
