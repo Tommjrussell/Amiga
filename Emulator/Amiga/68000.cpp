@@ -1673,7 +1673,14 @@ bool M68000::Opcode_shift_reg(int& delay)
 
 	const uint16_t flags = (op != 0x0018) ? Carry | Extend : Carry;
 
-	SetFlag(Carry, false);
+	if (op == 0x0010) // roxD
+	{
+		SetFlag(Carry, (m_regs.status & Extend) != 0);
+	}
+	else
+	{
+		SetFlag(Carry, false);
+	}
 
 	const uint64_t mask = ~0u >> ((4 - m_opcodeSize) * 8);
 	const uint64_t msb = 1ull << (m_opcodeSize * 8 - 1);
