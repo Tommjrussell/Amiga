@@ -191,6 +191,8 @@ namespace cpu
 		bool Opcode_sbcd(int& delay);
 		bool Opcode_chk(int& delay);
 		bool Opcode_rtr(int& delay);
+		bool Opcode_negx(int& delay);
+		bool Opcode_tas(int& delay);
 
 	private:
 

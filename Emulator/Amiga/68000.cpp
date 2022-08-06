@@ -344,7 +344,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::Opcode_move_from_sr,		//	move    SR, {ea:w}
 	&M68000::Opcode_move_to_ccr,		//	move    {ea:b}, CCR
 	&M68000::Opcode_move_to_sr,			//	move    {ea:w}, SR
-	&M68000::UnimplementOpcode,			//	negx.{s}  {ea}
+	&M68000::Opcode_negx,				//	negx.{s}  {ea}
 	&M68000::Opcode_clr,				//	clr.{s}   {ea}
 	&M68000::Opcode_neg,				//	neg.{s}   {ea}
 	&M68000::Opcode_not,				//	not.{s}   {ea}
@@ -352,7 +352,7 @@ M68000::OpcodeInstruction M68000::OpcodeFunction[kNumOpcodeEntries] =
 	&M68000::UnimplementOpcode,			//	nbcd    {ea:b}
 	&M68000::Opcode_swap,				//	swap    D{reg}
 	&M68000::Opcode_pea,				//	pea     {ea:l}
-	&M68000::UnimplementOpcode,			//	tas     {ea:b}
+	&M68000::Opcode_tas,				//	tas     {ea:b}
 	&M68000::Opcode_tst,				//	tst.{s}   {ea}
 	&M68000::Opcode_trap,				//	trap    {v}
 	&M68000::Opcode_link,				//	link    A{reg}, {immDis16}
@@ -2686,6 +2686,30 @@ bool M68000::Opcode_subx(int& delay)
 	return true;
 }
 
+bool M68000::Opcode_negx(int& delay)
+{
+	uint64_t value;
+	if (!GetEaValue(m_ea[0], m_opcodeSize, value))
+		return false;
+
+	const uint64_t extend = (m_regs.status & Extend) ? 1 : 0;
+	const uint16_t zero = (m_regs.status & Zero);
+
+	value = AluSub(0, value, extend, m_opcodeSize, AllFlags);
+
+	m_regs.status = (m_regs.status & ~Zero) | (m_regs.status & zero);
+
+	if (!SetEaValue(m_ea[0], m_opcodeSize, value))
+		return false;
+
+	if (m_opcodeSize == 4 && m_ea[0].type == EffectiveAddressType::DataRegister)
+	{
+		delay += 1;
+	}
+
+	return true;
+}
+
 bool M68000::Opcode_abcd(int& delay)
 {
 	const auto dReg = (m_operation & 0b00001110'00000000) >> 9;
@@ -2824,6 +2848,33 @@ bool M68000::Opcode_chk(int& delay)
 	delay += 3;
 	return true;
 }
+
+bool M68000::Opcode_tas(int& delay)
+{
+	// tas is generally not safe on Amigas when modifying memory. However, it can
+	// also target data registers which should be safe as memory is not affected.
+	// Some sneaky copy protection code uses this.
+
+	// Implement tas for data registers only. All other valid EA types touch memory and
+	// are potentially unsafe.
+	if (m_ea[0].type != EffectiveAddressType::DataRegister)
+		return false;
+
+	auto& reg = m_regs.d[m_ea[0].addrIdx];
+
+	auto value = GetReg(reg, 1);
+
+	SetFlag(Negative, (value & 0x80) != 0);
+	SetFlag(Zero, (value & 0xff) == 0);
+	SetFlag(Carry | Overflow, false);
+
+	value |= 0x80;
+
+	SetReg(reg, 1, value);
+
+	return true;
+}
+
 
 template <typename S>
 void M68000::Stream(S& s)
