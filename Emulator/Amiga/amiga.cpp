@@ -1438,6 +1438,18 @@ void am::Amiga::SetControllerButton(int controller, int button, bool pressed)
 		if (controller == 0)
 		{
 			m_rightMouseButtonDown = pressed;
+			auto& potgor = Reg(Register::POTGOR);
+			if ((potgor & 0x0800) == 0x0000)
+			{
+				if (m_rightMouseButtonDown)
+				{
+					potgor &= ~0x0400;
+				}
+				else
+				{
+					potgor |= 0x0400;
+				}
+			}
 		}
 		break;
 
