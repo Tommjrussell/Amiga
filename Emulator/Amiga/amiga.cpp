@@ -3280,10 +3280,7 @@ void am::Amiga::ProcessDriveCommands(uint8_t data)
 			// step signal has gone low - do a step
 
 			// Update the DSKCHANGE flag - low when no disk is in drive.
-			if (IsDiskInserted(m_driveSelected))
-			{
-				drive.diskChange = true;
-			}
+			drive.diskChange = IsDiskInserted(m_driveSelected);
 
 			if (directionInwards)
 			{
