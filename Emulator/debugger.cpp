@@ -248,6 +248,9 @@ void guru::Debugger::UpdateAssembly()
 
 	uint32_t disassemblyStop = 0;
 
+	const am::Subroutine* currentSub = nullptr;
+	const am::Subroutine* nextSub = nullptr;
+
 	if (m_symbols)
 	{
 		auto sub = m_symbols->GetSub(m_trackPc ? pc : m_disassemblyStart);
@@ -259,6 +262,9 @@ void guru::Debugger::UpdateAssembly()
 			}
 			disassemblyStop = sub->end;
 		}
+
+		currentSub = m_symbols->GetSub(m_disassemblyStart);
+		nextSub = m_symbols->NextSub(m_disassemblyStart);
 	}
 
 	m_disassembler->pc = m_disassemblyStart;
@@ -291,7 +297,19 @@ void guru::Debugger::UpdateAssembly()
 			snapToPc = onPc = true;
 		}
 
-		const uint32_t addr = m_disassembler->pc;
+		uint32_t addr = m_disassembler->pc;
+
+		auto disasm = m_disassembler->Disassemble();
+		if (nextSub && m_disassembler->pc >= nextSub->start)
+		{
+			currentSub = nextSub;
+			nextSub = m_symbols->NextSub(m_disassembler->pc);
+			if (m_disassembler->pc > currentSub->start)
+			{
+				m_disassembler->pc = currentSub->start;
+				disasm = "???";
+			}
+		}
 
 		int visited = 0;
 		for (auto ad : *history)
@@ -302,7 +320,7 @@ void guru::Debugger::UpdateAssembly()
 
 		std::string line = util::HexToString(addr);
 		line += onPc ? " > " : " : ";
-		line += m_disassembler->Disassemble();
+		line += disasm;
 		m_disassembly.emplace_back(DisassemblyLine{addr, visited, line});
 	}
 }

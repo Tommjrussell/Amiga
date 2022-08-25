@@ -720,7 +720,16 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 			pc += 2;
 			value |= m_memory->GetWord(pc);
 			pc += 2;
-			count = sprintf_s(buffptr, charsLeft, "($%08x).l", value);
+
+			const auto var = m_symbols ? m_symbols->GetVariable(value) : nullptr;
+			if (var)
+			{
+				count = sprintf_s(buffptr, charsLeft, "(%s).l", var->name.c_str());
+			}
+			else
+			{
+				count = sprintf_s(buffptr, charsLeft, "($%08x).l", value);
+			}
 		}	break;
 
 		case 0b010: // (d16, PC)

@@ -1,6 +1,7 @@
 #include "symbols.h"
 
 #include "util/tokens.h"
+#include "util/strings.h"
 
 #include <algorithm>
 #include <fstream>
@@ -8,6 +9,7 @@
 am::SymLoadResults am::Symbols::Load(const std::string& file)
 {
 	m_subroutines.clear();
+	m_variables.clear();
 
 	std::ifstream ifs(file);
 	if (!ifs.is_open())
@@ -36,8 +38,6 @@ am::SymLoadResults am::Symbols::Load(const std::string& file)
 		if (t.type == Token::Type::End)
 			continue;
 
-		Subroutine sub;
-
 		if (t.type != Token::Type::Int)
 		{
 			++res.numErrors;
@@ -48,11 +48,11 @@ am::SymLoadResults am::Symbols::Load(const std::string& file)
 			continue;
 		}
 
-		sub.start = t.num;
+		uint32_t addr = t.num;
 
 		t = util::GetToken(line, off);
 
-		if (t.type != Token::Type::Int)
+		if (t.type != Token::Type::Int && t.type != Token::Type::Name)
 		{
 			++res.numErrors;
 			if (res.errorLine == -1)
@@ -62,36 +62,96 @@ am::SymLoadResults am::Symbols::Load(const std::string& file)
 			continue;
 		}
 
-		sub.end = t.num;
-
-		t = util::GetToken(line, off);
-
-		if (t.type != Token::Type::Name)
+		if (t.type == Token::Type::Name)
 		{
-			++res.numErrors;
-			if (res.errorLine == -1)
+			int size = 0;
+
+			auto typeStr = util::ToUpper(t.str);
+
+			if (typeStr == "LONG")
+				size = 4;
+			else if (typeStr == "WORD")
+				size = 2;
+			else if (typeStr == "BYTE")
+				size = 1;
+
+			if (size == 0)
 			{
-				res.errorLine = lineNum;
+				++res.numErrors;
+				if (res.errorLine == -1)
+				{
+					res.errorLine = lineNum;
+				}
+				continue;
 			}
-			continue;
+
+			t = util::GetToken(line, off);
+
+			if (t.type != Token::Type::Name)
+			{
+				++res.numErrors;
+				if (res.errorLine == -1)
+				{
+					res.errorLine = lineNum;
+				}
+				continue;
+			}
+
+			Variable var;
+			var.addr = addr;
+			var.size = size;
+			var.name = t.str;
+
+			t = util::GetToken(line, off);
+
+			if (t.type != Token::Type::End)
+			{
+				++res.numErrors;
+				if (res.errorLine == -1)
+				{
+					res.errorLine = lineNum;
+				}
+				continue;
+			}
+
+			AddVariable(std::move(var));
+			res.numLoaded++;
 		}
-
-		sub.name = std::move(t.str);
-
-		t = util::GetToken(line, off);
-
-		if (t.type != Token::Type::End)
+		else
 		{
-			++res.numErrors;
-			if (res.errorLine == -1)
-			{
-				res.errorLine = lineNum;
-			}
-			continue;
-		}
+			Subroutine sub;
+			sub.start = addr;
+			sub.end = t.num;
 
-		AddSubroutine(std::move(sub));
-		res.numLoaded++;
+			t = util::GetToken(line, off);
+
+			if (t.type != Token::Type::Name)
+			{
+				++res.numErrors;
+				if (res.errorLine == -1)
+				{
+					res.errorLine = lineNum;
+				}
+				continue;
+			}
+
+			sub.name = std::move(t.str);
+
+			t = util::GetToken(line, off);
+
+			if (t.type != Token::Type::End)
+			{
+				++res.numErrors;
+				if (res.errorLine == -1)
+				{
+					res.errorLine = lineNum;
+				}
+				continue;
+			}
+
+			AddSubroutine(std::move(sub));
+			res.numLoaded++;
+		}
 	}
 
 	std::sort(std::begin(m_subroutines), std::end(m_subroutines),
@@ -101,12 +161,48 @@ am::SymLoadResults am::Symbols::Load(const std::string& file)
 		}
 	);
 
+	std::sort(std::begin(m_variables), std::end(m_variables),
+		[](const Variable& a, const Variable& b)
+		{
+			return a.addr < b.addr;
+		}
+	);
+
 	return res;
 }
 
 void am::Symbols::AddSubroutine(Subroutine&& sub)
 {
 	m_subroutines.emplace_back(std::move(sub));
+}
+
+void am::Symbols::AddVariable(Variable&& var)
+{
+	m_variables.emplace_back(std::move(var));
+}
+
+const am::Variable* am::Symbols::GetVariable(uint32_t addr) const
+{
+	if (m_variables.empty())
+		return nullptr;
+
+	const auto begin = std::begin(m_variables);
+	const auto end = std::end(m_variables);
+
+	auto it = std::lower_bound(begin, end, addr,
+		[](const Variable& var, uint32_t addr)
+		{
+			return addr < var.addr;
+		}
+	);
+
+	if (it == end)
+		return nullptr;
+
+	if (it->addr != addr)
+		return nullptr;
+
+	return &(*it);
 }
 
 const am::Subroutine* am::Symbols::GetSub(uint32_t addr) const
@@ -130,6 +226,27 @@ const am::Subroutine* am::Symbols::GetSub(uint32_t addr) const
 	it--;
 
 	if (addr >= it->end)
+		return nullptr;
+
+	return &(*it);
+}
+
+const am::Subroutine* am::Symbols::NextSub(uint32_t addr) const
+{
+	if (m_subroutines.empty())
+		return nullptr;
+
+	const auto begin = std::begin(m_subroutines);
+	const auto end = std::end(m_subroutines);
+
+	auto it = std::upper_bound(begin, end, addr,
+		[](uint32_t addr, const Subroutine& sub)
+		{
+			return addr < sub.start;
+		}
+	);
+
+	if (it == end)
 		return nullptr;
 
 	return &(*it);
