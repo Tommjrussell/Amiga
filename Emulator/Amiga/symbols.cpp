@@ -192,7 +192,7 @@ const am::Variable* am::Symbols::GetVariable(uint32_t addr) const
 	auto it = std::lower_bound(begin, end, addr,
 		[](const Variable& var, uint32_t addr)
 		{
-			return addr < var.addr;
+			return var.addr < addr;
 		}
 	);
 
