@@ -1,8 +1,10 @@
 #include "App.h"
 
 #include "amiga/amiga.h"
+#include "Amiga/symbols.h"
 #include "debugger.h"
 #include "custom_chips_debugger.h"
+#include "variable_watch.h"
 #include "memory_editor.h"
 #include "disk_manager.h"
 #include "disk_image.h"
@@ -155,9 +157,11 @@ guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
 		rom = std::move(LoadRom(romFile));
 	}
 	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom));
+	m_symbols = std::make_unique<am::Symbols>();
 
-	m_debugger = std::make_unique<Debugger>(this, m_amiga.get());
+	m_debugger = std::make_unique<Debugger>(this, m_amiga.get(), m_symbols.get());
 	m_ccDebugger = std::make_unique<CCDebugger>(this, m_amiga.get());
+	m_variableWatch = std::make_unique<VariableWatch>(m_amiga.get(), m_symbols.get());
 	m_diskActivity = std::make_unique<DiskActivity>(m_amiga.get());
 
 	for (int i = 0; i < _countof(kStandardKeyMapping); i++)
@@ -271,6 +275,11 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 				m_ccDebuggerOpen = true;
 			}
 
+			if (ImGui::MenuItem("Variable Watch", ""))
+			{
+				m_variableWatchOpen = true;
+			}
+
 			if (ImGui::MenuItem("Memory Viewer/Editor", ""))
 			{
 				if (!m_memoryEditor)
@@ -340,6 +349,11 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 	if (m_ccDebuggerOpen)
 	{
 		m_ccDebuggerOpen = m_ccDebugger->Draw();
+	}
+
+	if (m_variableWatchOpen)
+	{
+		m_variableWatchOpen = m_variableWatch->Draw();
 	}
 
 	if (m_memoryEditor)
@@ -526,7 +540,8 @@ void guru::AmigaApp::ConvertAndSendKeyCode(util::Key key, bool down)
 
 void guru::AmigaApp::SetSymbolsFile(const std::string& symbolsFile)
 {
-	m_debugger->SetSymbolsFile(symbolsFile);
+	m_symbols->SetSymbolsFile(symbolsFile);
+	m_symbols->Load();
 }
 
 std::filesystem::path guru::AmigaApp::GetLocalAppDir() const

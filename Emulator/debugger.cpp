@@ -12,6 +12,7 @@
 #include "util/imgui_extras.h"
 
 #include <imgui.h>
+#include <sstream>
 
 namespace guru
 {
@@ -38,24 +39,18 @@ namespace guru
 	};
 }
 
-guru::Debugger::Debugger(guru::AmigaApp* app, am::Amiga* amiga)
+guru::Debugger::Debugger(guru::AmigaApp* app, am::Amiga* amiga, am::Symbols* symbols)
 	: m_app(app)
 	, m_amiga(amiga)
+	, m_symbols(symbols)
 {
 	m_memory = std::make_unique<DebuggerMemoryInterface>(amiga);
-	m_symbols = std::make_unique<am::Symbols>();
 	m_disassembler = std::make_unique<am::Disassembler>(m_memory.get());
-	m_disassembler->SetSymbols(m_symbols.get());
+	m_disassembler->SetSymbols(m_symbols);
 }
 
 guru::Debugger::~Debugger()
 {
-}
-
-void guru::Debugger::SetSymbolsFile(const std::string& symbolsFile)
-{
-	m_symbolsFile = symbolsFile;
-	m_symbols->Load(m_symbolsFile);
 }
 
 void guru::Debugger::Refresh()
@@ -136,8 +131,25 @@ bool guru::Debugger::Draw()
 
 	if (ImGui::Button("Reload Symbols"))
 	{
-		m_symbols->Load(m_symbolsFile);
+		m_symbols->Load();
 		m_disassembly.clear();
+	}
+
+	ImGui::SameLine();
+	if (ImGui::Button("Copy Disassembly"))
+	{
+		std::stringstream ss;
+
+		for (auto& d : m_disassembly)
+		{
+			auto sub = m_symbols->GetSub(d.addr);
+			if (sub && sub->start == d.addr)
+			{
+				ss << sub->name << "\n";
+			}
+			ss << d.text << "\n";
+		}
+		ImGui::SetClipboardText(ss.str().c_str());
 	}
 
 	{

@@ -20,12 +20,11 @@ namespace guru
 	class Debugger
 	{
 	public:
-		explicit Debugger(guru::AmigaApp* app, am::Amiga* amiga);
+		explicit Debugger(guru::AmigaApp* app, am::Amiga* amiga, am::Symbols* symbols);
 		~Debugger();
 
 		bool Draw();
 		void Refresh();
-		void SetSymbolsFile(const std::string& symbolsFile);
 
 	private:
 
@@ -42,7 +41,6 @@ namespace guru
 
 		std::unique_ptr<DebuggerMemoryInterface> m_memory;
 		std::unique_ptr<am::Disassembler> m_disassembler;
-		std::unique_ptr<am::Symbols> m_symbols;
 
 		struct DisassemblyLine
 		{
@@ -52,7 +50,7 @@ namespace guru
 		};
 
 		std::vector<DisassemblyLine> m_disassembly;
-		std::string m_symbolsFile;
+		am::Symbols* m_symbols;
 
 		guru::AmigaApp* m_app;
 		am::Amiga* m_amiga;

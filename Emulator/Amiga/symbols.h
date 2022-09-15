@@ -32,7 +32,9 @@ namespace am
 	class Symbols
 	{
 	public:
-		SymLoadResults Load(const std::string& file);
+		void SetSymbolsFile(const std::string& symbolsFile);
+
+		SymLoadResults Load();
 
 		void AddSubroutine(Subroutine&& sub);
 		void AddVariable(Variable&& var);
@@ -42,9 +44,16 @@ namespace am
 		const Subroutine* GetSub(uint32_t addr) const;
 		const Subroutine* NextSub(uint32_t addr) const;
 
+		const std::vector<Variable>& GetVariables() const
+		{
+			return m_variables;
+		}
+
 	private:
 		std::vector<Subroutine> m_subroutines;
 		std::vector<Variable> m_variables;
+
+		std::string m_symbolsFile;
 	};
 
 }

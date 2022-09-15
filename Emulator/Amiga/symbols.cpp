@@ -6,12 +6,17 @@
 #include <algorithm>
 #include <fstream>
 
-am::SymLoadResults am::Symbols::Load(const std::string& file)
+void am::Symbols::SetSymbolsFile(const std::string& symbolsFile)
+{
+	m_symbolsFile = symbolsFile;
+}
+
+am::SymLoadResults am::Symbols::Load()
 {
 	m_subroutines.clear();
 	m_variables.clear();
 
-	std::ifstream ifs(file);
+	std::ifstream ifs(m_symbolsFile);
 	if (!ifs.is_open())
 		return SymLoadResults{ false };
 

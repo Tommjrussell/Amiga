@@ -18,12 +18,14 @@ namespace util
 namespace am
 {
 	class Amiga;
+	class Symbols;
 }
 
 namespace guru
 {
 	class Debugger;
 	class CCDebugger;
+	class VariableWatch;
 	class MemoryEditor;
 	class DiskManager;
 	class LogViewer;
@@ -91,6 +93,7 @@ namespace guru
 		bool m_joystickEmulation = false;
 		bool m_debuggerOpen = false;
 		bool m_ccDebuggerOpen = false;
+		bool m_variableWatchOpen = false;
 		bool m_isRunning = false;
 		bool m_isStarting = false;
 
@@ -100,10 +103,13 @@ namespace guru
 
 		std::unique_ptr<Debugger> m_debugger;
 		std::unique_ptr<CCDebugger> m_ccDebugger;
+		std::unique_ptr<VariableWatch> m_variableWatch;
 		std::unique_ptr<MemoryEditor> m_memoryEditor;
 		std::unique_ptr<DiskManager> m_diskManager;
 		std::unique_ptr<DiskActivity> m_diskActivity;
 		std::unique_ptr<LogViewer> m_logViewer;
+
+		std::unique_ptr<am::Symbols> m_symbols;
 
 		enum class InputMode
 		{
