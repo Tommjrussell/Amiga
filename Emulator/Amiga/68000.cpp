@@ -900,8 +900,14 @@ bool M68000::ExecuteOneInstruction(int& delay)
 	}
 	else
 	{
-		// illegal instruction.
-		result = StartInternalException(4);
+		// illegal/unknown instruction.
+
+		const int vectorNum
+			= ((m_operation & 0xf000) == 0xa000) ? 10 // Line 1010 Emulator
+			: ((m_operation & 0xf000) == 0xf000) ? 11 // Line 1111 Emulator
+			: 4; // Illegal Instruction
+
+		result = StartInternalException(vectorNum);
 	}
 
 	// For unimplemented opcodes, freeze the CPU at the unimplemented opcode.
