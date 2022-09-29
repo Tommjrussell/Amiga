@@ -51,14 +51,13 @@ namespace
 
 		while (off < end)
 		{
-			char c = input[off];
+			char c = input[off++];
 
 			if (c == '\"')
 			{
-				t.str = input.substr(startOff, off - startOff);
+				t.str = input.substr(startOff, (off - 1) - startOff);
 				return t;
 			}
-			++off;
 		}
 
 		t.type = Token::Type::Bad;

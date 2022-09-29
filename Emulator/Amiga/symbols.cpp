@@ -20,7 +20,6 @@ am::SymLoadResults am::Symbols::Load()
 	if (!ifs.is_open())
 		return SymLoadResults{ false };
 
-
 	SymLoadResults res{ true };
 	res.errorLine = -1;
 	std::string line;
@@ -92,7 +91,7 @@ am::SymLoadResults am::Symbols::Load()
 
 			t = util::GetToken(line, off);
 
-			if (t.type != Token::Type::Name)
+			if (t.type != Token::Type::String)
 			{
 				++res.numErrors;
 				if (res.errorLine == -1)
@@ -130,7 +129,7 @@ am::SymLoadResults am::Symbols::Load()
 
 			t = util::GetToken(line, off);
 
-			if (t.type != Token::Type::Name)
+			if (t.type != Token::Type::String)
 			{
 				++res.numErrors;
 				if (res.errorLine == -1)
