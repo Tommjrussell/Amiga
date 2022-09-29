@@ -66,8 +66,8 @@ namespace
 		{ 0b11111111'11111111,	0b01001110'01110101,	"rts" },
 		{ 0b11111111'11111111,	0b01001110'01110110,	"trapv" },
 		{ 0b11111111'11111111,	0b01001110'01110111,	"rtr" },
-		{ 0b11111111'11000000,	0b01001110'10000000,	"jsr		{ea}" },
-		{ 0b11111111'11000000,	0b01001110'11000000,	"jmp		{ea}" },
+		{ 0b11111111'11000000,	0b01001110'10000000,	"jsr		{eaJmp}" },
+		{ 0b11111111'11000000,	0b01001110'11000000,	"jmp		{eaJmp}" },
 		{ 0b11111111'10000000,	0b01001000'10000000,	"movem.{wl} {list}, {ea2}" },
 		{ 0b11111111'10000000,	0b01001100'10000000,	"movem.{wl} {ea2}, {list}" },
 		{ 0b11110001'11000000,	0b01000001'11000000,	"lea		{ea}, A{REG}" },
@@ -148,6 +148,7 @@ namespace
 		ea,
 		ea_skip_word,
 		ea_move_destination,
+		ea_jump,
 		condition,
 		register_low,
 		register_high,
@@ -173,6 +174,7 @@ namespace
 		"ea",			// ea,
 		"ea2",			// ea_skip_word,
 		"EA",			// ea_move_destination,
+		"eaJmp",		// ea_jump,
 		"cc",			// condition,
 		"reg",			// register_low,
 		"REG",			// register_high,
@@ -455,11 +457,12 @@ std::string am::Disassembler::Disassemble()
 				[[fallthrough]];
 
 			case CodeType::ea:
+			case CodeType::ea_jump:
 			{
 				const auto mode = (instruction & 0b00000000'00111000) >> 3;
 				const auto reg  = (instruction & 0b00000000'00000111);
 				const auto size = (p.size != -1) ? p.size : opcodeSize;
-				WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft);
+				WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft, p.code == CodeType::ea_jump);
 			}	break;
 
 			case CodeType::ea_move_destination:
@@ -467,7 +470,7 @@ std::string am::Disassembler::Disassemble()
 				const auto mode = (instruction & 0b00000001'11000000) >> 6;
 				const auto reg  = (instruction & 0b00001110'00000000) >> 9;
 				const auto size = (p.size != -1) ? p.size : opcodeSize;
-				WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft);
+				WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft, false);
 			}	break;
 
 			case CodeType::condition:
@@ -650,7 +653,7 @@ uint32_t am::Disassembler::GetImmediateValue(int size)
 	return imm;
 }
 
-void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft)
+void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft, bool isJumpTarget)
 {
 	int count = 0;
 
@@ -721,10 +724,24 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 			value |= m_memory->GetWord(pc);
 			pc += 2;
 
-			const auto var = m_symbols ? m_symbols->GetVariable(value) : nullptr;
-			if (var)
+			const std::string* symName = nullptr;
+			if (m_symbols)
 			{
-				count = sprintf_s(buffptr, charsLeft, "(%s).l", var->name.c_str());
+				if (isJumpTarget)
+				{
+					const auto sym = m_symbols->GetSub(value);
+					symName = sym ? &(sym->name) : nullptr;
+				}
+				else
+				{
+					const auto sym = m_symbols->GetVariable(value);
+					symName = sym ? &(sym->name) : nullptr;
+				}
+			}
+
+			if (symName)
+			{
+				count = sprintf_s(buffptr, charsLeft, "(%s).l", symName->c_str());
 			}
 			else
 			{

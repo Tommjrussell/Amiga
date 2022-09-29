@@ -28,7 +28,7 @@ namespace am
 
 	private:
 		uint32_t GetImmediateValue(int size);
-		void WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft);
+		void WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft, bool isJumpTarget);
 		void WriteRegisterList(uint16_t mask, bool isReversed, char*& buffptr, int& charsLeft);
 
 	public:
