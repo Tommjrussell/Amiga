@@ -26,6 +26,14 @@ namespace am
 		ChipRam2Mib = 2048 * 1024,
 	};
 
+	enum class AgnusVersion : uint16_t
+	{
+		PAL_OCS = 0x0000,
+		NTSC_OCS = 0x1000,
+		PAL_ECS	= 0x2000,
+		NTSC_ESC = 0x3000,
+	};
+
 	enum class Mapped : uint32_t
 	{
 		Reserved = 0x00,
@@ -391,6 +399,8 @@ namespace am
 		std::vector<uint8_t> m_rom;
 		std::vector<uint8_t> m_chipRam;
 		std::vector<uint8_t> m_slowRam;
+
+		AgnusVersion m_agnusVersion = AgnusVersion::PAL_ECS;
 
 		bool m_romOverlayEnabled = false;
 		bool m_isNtsc = false;

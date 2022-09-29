@@ -996,6 +996,7 @@ void am::Amiga::DoOneTick()
 			vposr = m_vPos >> 8;
 			const bool isLongFrame = (m_frameLength & 1) != 0;
 			vposr |= (isLongFrame ? 0x8000 : 0);
+			vposr |= uint16_t(m_agnusVersion);
 		}
 
 		if (m_breakAtLine && m_vPos == m_breakAtLineNum)
