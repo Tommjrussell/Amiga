@@ -77,6 +77,8 @@ namespace guru
 
 		void SetSymbolsFile(const std::string& symbolsFile);
 
+		void ShowAddrInMemoryEditor(uint32_t addr);
+
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
 		void ConvertAndSendKeyCode(util::Key key, bool down);
@@ -86,6 +88,8 @@ namespace guru
 
 		void LoadSnapshot(const std::filesystem::path& file);
 		void SaveSnapshot(const std::filesystem::path& file);
+
+		void OpenMemoryEditor();
 
 	private:
 		bool m_isQuitting = false;

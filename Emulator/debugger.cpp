@@ -353,6 +353,15 @@ void guru::Debugger::DrawCpuRegisters()
 		char buff[8];
 		sprintf_s(buff, "a%d", i);
 		ImGui::InputInt(buff, (int*)&regs.a[i], 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
+		if (ImGui::BeginPopupContextItem())
+		{
+			if (ImGui::MenuItem("Goto Address"))
+			{
+				m_app->ShowAddrInMemoryEditor(regs.a[i]);
+			}
+
+			ImGui::EndPopup();
+		}
 	}
 	ImGui::PopItemWidth();
 
@@ -377,10 +386,28 @@ void guru::Debugger::DrawCpuRegisters()
 		m_amiga->SetPC(regs.pc);
 		m_disassembly.clear();
 	}
+	if (ImGui::BeginPopupContextItem())
+	{
+		if (ImGui::MenuItem("Goto Address"))
+		{
+			m_app->ShowAddrInMemoryEditor(regs.pc);
+		}
+
+		ImGui::EndPopup();
+	}
 
 	ImGui::InputInt(m_amiga->GetCpu()->InSupervisorMode() ? "usp" : "ssp",
 		(int*)&regs.altA7, 0, 0,
 		ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
+	if (ImGui::BeginPopupContextItem())
+	{
+		if (ImGui::MenuItem("Goto Address"))
+		{
+			m_app->ShowAddrInMemoryEditor(regs.altA7);
+		}
+
+		ImGui::EndPopup();
+	}
 	ImGui::PopItemWidth();
 
 	bool extendFlag = (regs.status & 0x10) != 0;

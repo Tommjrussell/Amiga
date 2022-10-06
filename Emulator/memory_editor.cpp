@@ -30,5 +30,9 @@ bool guru::MemoryEditor::Draw()
 {
 	m_imMemEditor->DrawWindow("Memory Editor", reinterpret_cast<uint8_t*>(m_amiga), 0x1000000, 0);
 	return m_imMemEditor->Open;
+}
 
+void guru::MemoryEditor::GotoAddr(uint32_t addr)
+{
+	m_imMemEditor->GotoAddrAndHighlight(addr, addr);
 }

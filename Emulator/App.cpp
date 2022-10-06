@@ -282,10 +282,7 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 
 			if (ImGui::MenuItem("Memory Viewer/Editor", ""))
 			{
-				if (!m_memoryEditor)
-				{
-					m_memoryEditor = std::make_unique<MemoryEditor>(m_amiga.get());
-				}
+				OpenMemoryEditor();
 			}
 
 			if (ImGui::MenuItem("Disk Manager", ""))
@@ -594,4 +591,20 @@ void guru::AmigaApp::SaveSnapshot(const std::filesystem::path& file)
 		util::StreamString(ofile, m_amiga->GetDiskFilename(i));
 	}
 
+}
+
+void guru::AmigaApp::OpenMemoryEditor() 
+{
+	if (!m_memoryEditor)
+	{
+		m_memoryEditor = std::make_unique<MemoryEditor>(m_amiga.get());
+	}
+
+	ImGui::SetWindowFocus("Memory Editor");
+}
+
+void guru::AmigaApp::ShowAddrInMemoryEditor(uint32_t addr) 
+{
+	OpenMemoryEditor();
+	m_memoryEditor->GotoAddr(addr);
 }
