@@ -18,7 +18,7 @@ namespace guru
 		explicit MemoryEditor(am::Amiga* amiga);
 		~MemoryEditor();
 
-		void GotoAddr(uint32_t addr);
+		void GotoAndHighlightMem(uint32_t addr, uint32_t size);
 
 		bool Draw();
 

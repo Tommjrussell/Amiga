@@ -37,6 +37,9 @@ namespace guru
 
 		void UpdateAssembly();
 
+		uint32_t CalculateEaAddress(const am::Disasm::EaMem& ea, uint32_t opcodePc) const;
+		std::string AddressToString(uint32_t addr) const;
+
 	private:
 
 		std::unique_ptr<DebuggerMemoryInterface> m_memory;
@@ -46,6 +49,7 @@ namespace guru
 		{
 			uint32_t addr;
 			int visited;
+			am::Disasm::Opcode disassembledOpcode;
 			std::string text;
 		};
 

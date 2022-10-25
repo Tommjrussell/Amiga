@@ -341,7 +341,7 @@ namespace
 
 }
 
-std::string am::Disassembler::Disassemble()
+am::Disasm::Opcode am::Disassembler::Disassemble()
 {
 	_ASSERTE(m_memory);
 
@@ -362,8 +362,10 @@ std::string am::Disassembler::Disassemble()
 
 	if (encoding == nullptr)
 	{
-		return "???";
+		return { "???" };
 	}
+
+	Disasm::Opcode opcode;
 
 	Parser parser(encoding->disassembly);
 
@@ -382,7 +384,8 @@ std::string am::Disassembler::Disassemble()
 		case PieceType::end:
 		{
 			buffer[std::size(buffer)-1] = '\0';
-			return std::string(buffer);
+			opcode.text = std::string(buffer);
+			return opcode;
 		}
 
 		case PieceType::text:
@@ -421,7 +424,7 @@ std::string am::Disassembler::Disassemble()
 			{
 				opcodeSize = (instruction & 0b00000000'11000000) >> 6;
 				if (opcodeSize == 0b11)
-					return "<illegal size>";
+					return  { "<illegal size>" };
 
 				*buffptr++ = sizeCodes[opcodeSize];
 				charsLeft--;
@@ -432,7 +435,7 @@ std::string am::Disassembler::Disassemble()
 				const auto moveSize = (instruction & 0b00110000'00000000) >> 12;
 				opcodeSize = (moveSize == 0b01) ? 0b00 : (moveSize == 0b11) ? 0b01 : (moveSize == 0b10) ? 0b10 : 0b11;
 				if (opcodeSize == 0b11)
-					return "<illegal size>";
+					return { "<illegal size>" };
 
 				*buffptr++ = sizeCodes[opcodeSize];
 				charsLeft--;
@@ -462,7 +465,8 @@ std::string am::Disassembler::Disassemble()
 				const auto mode = (instruction & 0b00000000'00111000) >> 3;
 				const auto reg  = (instruction & 0b00000000'00000111);
 				const auto size = (p.size != -1) ? p.size : opcodeSize;
-				WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft, p.code == CodeType::ea_jump);
+				opcode.source = WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft, p.code == CodeType::ea_jump);
+				opcode.size = 1 << size;
 			}	break;
 
 			case CodeType::ea_move_destination:
@@ -470,7 +474,8 @@ std::string am::Disassembler::Disassemble()
 				const auto mode = (instruction & 0b00000001'11000000) >> 6;
 				const auto reg  = (instruction & 0b00001110'00000000) >> 9;
 				const auto size = (p.size != -1) ? p.size : opcodeSize;
-				WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft, false);
+				opcode.dest = WriteEffectiveAddress(mode, reg, size, buffptr, charsLeft, false);
+				opcode.size = 1 << size;
 			}	break;
 
 			case CodeType::condition:
@@ -624,7 +629,9 @@ std::string am::Disassembler::Disassemble()
 	}
 
 	buffer[std::size(buffer) - 1] = '\0';
-	return std::string(buffer);
+
+	opcode.text = std::string(buffer);
+	return opcode;
 }
 
 uint32_t am::Disassembler::GetImmediateValue(int size)
@@ -653,8 +660,57 @@ uint32_t am::Disassembler::GetImmediateValue(int size)
 	return imm;
 }
 
-void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft, bool isJumpTarget)
+namespace
 {
+
+	am::Disasm::EaMem AddressRegIndirect(int reg, uint32_t disp)
+	{
+		return am::Disasm::EaMem{ am::Disasm::Reg(int(am::Disasm::Reg::A0) + reg), disp };
+	}
+
+	am::Disasm::EaMem ProgramCounterIndirect(uint32_t disp)
+	{
+		return am::Disasm::EaMem{ am::Disasm::Reg::PC, disp };
+	}
+
+	am::Disasm::EaMem Address(uint32_t addr)
+	{
+		return am::Disasm::EaMem{ am::Disasm::Reg::NoReg, addr };
+	}
+
+	am::Disasm::EaMem AddressRegIndirectWithDataRegIndex(int reg, uint32_t disp, int indexReg, int indexSize)
+	{
+		return am::Disasm::EaMem{
+			am::Disasm::Reg(int(am::Disasm::Reg::A0) + reg), disp,
+			am::Disasm::Reg(int(am::Disasm::Reg::D0) + indexReg), 1, int8_t(indexSize) };
+	}
+
+	am::Disasm::EaMem AddressRegIndirectWithAddressRegIndex(int reg, uint32_t disp, int indexReg, int indexSize)
+	{
+		return am::Disasm::EaMem{
+			am::Disasm::Reg(int(am::Disasm::Reg::A0) + reg), disp,
+			am::Disasm::Reg(int(am::Disasm::Reg::A0) + indexReg), 1, int8_t(indexSize) };
+	}
+
+	am::Disasm::EaMem ProgramCounterIndirectWithDataRegIndex(uint32_t disp, int indexReg, int indexSize)
+	{
+		return am::Disasm::EaMem{
+			am::Disasm::Reg::PC, disp,
+			am::Disasm::Reg(int(am::Disasm::Reg::D0) + indexReg), 1, int8_t(indexSize) };
+	}
+
+	am::Disasm::EaMem ProgramCounterIndirectWithAddressRegIndex(uint32_t disp, int indexReg, int indexSize)
+	{
+		return am::Disasm::EaMem{
+			am::Disasm::Reg::PC, disp,
+			am::Disasm::Reg(int(am::Disasm::Reg::A0) + indexReg), 1, int8_t(indexSize) };
+	}
+}
+
+std::optional<am::Disasm::EaMem> am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*& buffptr, int& charsLeft, bool isJumpTarget)
+{
+	std::optional<Disasm::EaMem> eaMem;
+
 	int count = 0;
 
 	switch (mode)
@@ -669,14 +725,17 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 
 	case 0b010: // (An)
 		count = sprintf_s(buffptr, charsLeft, "(A%d)", reg);
+		eaMem = AddressRegIndirect(reg, 0);
 		break;
 
 	case 0b011: // (An)+
 		count = sprintf_s(buffptr, charsLeft, "(A%d)+", reg);
+		eaMem = AddressRegIndirect(reg, 0);
 		break;
 
 	case 0b100: // -(An)
 		count = sprintf_s(buffptr, charsLeft, "-(A%d)", reg);
+		eaMem = AddressRegIndirect(reg, -(1 << size));
 		break;
 
 	case 0b101: // (d16,An)
@@ -684,6 +743,7 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 		const uint32_t displacement = m_memory->GetWord(pc);
 		pc += 2;
 		count = sprintf_s(buffptr, charsLeft, "($%04x, A%d)", displacement, reg);
+		eaMem = AddressRegIndirect(reg, uint32_t(int32_t(int16_t(displacement))));
 		break;
 	}
 
@@ -703,6 +763,14 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 			exWordReg,
 			(isLong ? 'l' : 'w'));
 
+		if (isAddressReg)
+		{
+			eaMem = AddressRegIndirectWithAddressRegIndex(reg, uint32_t(int32_t(int8_t(displacement))), exWordReg, isLong ? 4 : 2);
+		}
+		else
+		{
+			eaMem = AddressRegIndirectWithDataRegIndex(reg, uint32_t(int32_t(int8_t(displacement))), exWordReg, isLong ? 4 : 2);
+		}
 	}	break;
 
 	case 0b111:
@@ -715,6 +783,7 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 			uint32_t value = m_memory->GetWord(pc);
 			pc += 2;
 			count = sprintf_s(buffptr, charsLeft, "($%04x).w", value);
+			eaMem = Address(uint32_t(int32_t(int16_t(value))));
 		}	break;
 
 		case 0b001: // (xxx).L
@@ -747,6 +816,7 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 			{
 				count = sprintf_s(buffptr, charsLeft, "($%08x).l", value);
 			}
+			eaMem = Address(value);
 		}	break;
 
 		case 0b010: // (d16, PC)
@@ -755,6 +825,7 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 			uint32_t value = pc + displacement;
 			count = sprintf_s(buffptr, charsLeft, "($%04x, PC){$%08x}", uint16_t(displacement), value);
 			pc += 2;
+			eaMem = ProgramCounterIndirect(uint32_t(int32_t(displacement)));
 		}	break;
 
 		case 0b011: // (d8, PC, Xn)
@@ -771,6 +842,15 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 				(isAddressReg ? 'A' : 'D'),
 				exWordReg,
 				(isLong ? 'l' : 'w'));
+
+			if (isAddressReg)
+			{
+				eaMem = ProgramCounterIndirectWithAddressRegIndex(uint32_t(int32_t(int8_t(displacement))), exWordReg, isLong ? 4 : 2);
+			}
+			else
+			{
+				eaMem = ProgramCounterIndirectWithDataRegIndex(uint32_t(int32_t(int8_t(displacement))), exWordReg, isLong ? 4 : 2);
+			}
 
 		}	break;
 
@@ -792,6 +872,8 @@ void am::Disassembler::WriteEffectiveAddress(int mode, int reg, int size, char*&
 
 	buffptr += count;
 	charsLeft -= count;
+
+	return eaMem;
 }
 
 void am::Disassembler::WriteRegisterList(uint16_t mask, bool isReversed, char*& buffptr, int& charsLeft)

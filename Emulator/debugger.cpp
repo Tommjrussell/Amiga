@@ -172,6 +172,9 @@ bool guru::Debugger::Draw()
 			auto cpu = m_amiga->GetCpu();
 			auto pc = cpu->GetPC();
 
+			int line = 0;
+			char idBuff[8];
+
 			for (auto& d : m_disassembly)
 			{
 				auto sub = m_symbols->GetSub(d.addr);
@@ -189,36 +192,88 @@ bool guru::Debugger::Draw()
 						ImGui::SetScrollHereY(0.5f);
 						recentre = false;
 					}
+				}
 
-					ImGui::Selectable(d.text.c_str(), true);
+				// Colour gets progressively more yellow as number of recent visits increases
+				static const ImU32 visitedColours[] =
+				{
+					IM_COL32(0, 255, 0, 255),
+					IM_COL32(31, 255, 0, 255),
+					IM_COL32(63, 255, 0, 255),
+					IM_COL32(95, 255, 0, 255),
+					IM_COL32(127, 255, 0, 255),
+					IM_COL32(159, 255, 0, 255),
+					IM_COL32(191, 255, 0, 255),
+					IM_COL32(223, 255, 0, 255),
+					IM_COL32(255, 255, 0, 255),
+				};
+
+				if (d.visited > 0)
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, visitedColours[std::min(8, d.visited - 1)]);
+				}
+
+				ImGui::TextUnformatted(d.text.c_str(), d.text.c_str() + 10);
+				ImGui::SameLine(0, 0);
+
+				if (d.visited > 0)
+				{
+					ImGui::PopStyleColor();
+				}
+
+				sprintf_s(idBuff, "A%d", line);
+				if (ImGui::BeginPopupContextItem(idBuff))
+				{
+					if (ImGui::MenuItem("Copy Addr"))
+					{
+						char clipboardText[12];
+						sprintf_s(clipboardText, "0x%06x", d.addr);
+						ImGui::SetClipboardText(clipboardText);
+					}
+					ImGui::EndPopup();
+				}
+
+				if (d.addr == pc)
+				{
+					ImGui::Selectable(d.text.c_str() + 10, true);
 				}
 				else
 				{
-					// Colour gets progressively more yellow as number of recent visits increases
-					static const ImU32 visitedColours[] =
-					{
-						IM_COL32(0, 255, 0, 255),
-						IM_COL32(31, 255, 0, 255),
-						IM_COL32(63, 255, 0, 255),
-						IM_COL32(95, 255, 0, 255),
-						IM_COL32(127, 255, 0, 255),
-						IM_COL32(159, 255, 0, 255),
-						IM_COL32(191, 255, 0, 255),
-						IM_COL32(223, 255, 0, 255),
-						IM_COL32(255, 255, 0, 255),
-					};
+					ImGui::TextUnformatted(d.text.c_str() + 10);
+				}
 
-					if (d.visited > 0)
+				if (d.disassembledOpcode.source || d.disassembledOpcode.dest)
+				{
+					sprintf_s(idBuff, "O%d", line);
+					if (ImGui::BeginPopupContextItem(idBuff))
 					{
-						ImGui::PushStyleColor(ImGuiCol_Text, visitedColours[std::min(8, d.visited-1)]);
-					}
-					ImGui::Text(d.text.c_str());
+						char menuTxt[40];
+						if (d.disassembledOpcode.source)
+						{
+							const uint32_t addr = CalculateEaAddress(d.disassembledOpcode.source.value(), d.addr + 2);
+							sprintf_s(menuTxt, "Source : %s", AddressToString(addr).c_str());
+							if (ImGui::MenuItem(menuTxt))
+							{
+								m_app->ShowMemInMemoryEditor(addr, d.disassembledOpcode.size);
+							}
+						}
 
-					if (d.visited > 0)
-					{
-						ImGui::PopStyleColor();
+						if (d.disassembledOpcode.dest)
+						{
+							const uint32_t addr = CalculateEaAddress(d.disassembledOpcode.dest.value(), d.addr + 2);
+
+							sprintf_s(menuTxt, "Dest   : %s", AddressToString(addr).c_str());
+							if (ImGui::MenuItem(menuTxt))
+							{
+								m_app->ShowMemInMemoryEditor(addr, d.disassembledOpcode.size);
+							}
+						}
+
+						ImGui::EndPopup();
 					}
 				}
+
+				++line;
 			}
 		}
 
@@ -231,6 +286,70 @@ bool guru::Debugger::Draw()
 
 	ImGui::End();
 	return open;
+}
+
+
+namespace
+{
+	uint32_t GetRegValue(const cpu::Registers& regs, am::Disasm::Reg reg, uint32_t opcodePc)
+	{
+		using namespace am::Disasm;
+
+		if (reg == Reg::NoReg)
+			return 0;
+
+		if (reg == Reg::PC)
+			return opcodePc;
+
+		if (int(reg) >= int(Reg::A0) && int(reg) <= int(Reg::A7))
+			return regs.a[int(reg) - int(Reg::A0)];
+
+		if (int(reg) >= int(Reg::D0) && int(reg) <= int(Reg::D7))
+			return regs.d[int(reg) - int(Reg::D0)];
+
+		return 0; // unknown register
+	}
+}
+
+std::string guru::Debugger::AddressToString(uint32_t addr) const
+{
+	char buffer[40];
+
+	if (m_symbols)
+	{
+		auto var = m_symbols->GetVariable(addr);
+		if (var)
+		{
+			if (var->addr == addr)
+			{
+				sprintf_s(buffer, "%s (%08x)", var->name.c_str(), addr);
+			}
+			else
+			{
+				sprintf_s(buffer, "%s+%01x (%08x)", var->name.c_str(), var->addr - addr, addr);
+			}
+			return std::string(buffer);
+		}
+	}
+
+	sprintf_s(buffer, "%08x", addr);
+	return std::string(buffer);
+}
+
+uint32_t guru::Debugger::CalculateEaAddress(const am::Disasm::EaMem& ea, uint32_t opcodePc) const
+{
+	auto& regs = m_amiga->GetCpu()->GetRegisters();
+
+	uint32_t addr = GetRegValue(regs, ea.baseReg, opcodePc);
+	addr += ea.displacement;
+
+	auto indexValue = int32_t(GetRegValue(regs, ea.indexReg, opcodePc));
+	if (ea.indexSize == 2)
+		indexValue = int32_t(int16_t(indexValue));
+
+	indexValue *= ea.indexScale;
+	addr += indexValue;
+	return addr;
 }
 
 void guru::Debugger::UpdateAssembly()
@@ -319,7 +438,7 @@ void guru::Debugger::UpdateAssembly()
 			if (m_disassembler->pc > currentSub->start)
 			{
 				m_disassembler->pc = currentSub->start;
-				disasm = "???";
+				disasm = { "???" };
 			}
 		}
 
@@ -332,8 +451,8 @@ void guru::Debugger::UpdateAssembly()
 
 		std::string line = util::HexToString(addr);
 		line += onPc ? " > " : " : ";
-		line += disasm;
-		m_disassembly.emplace_back(DisassemblyLine{addr, visited, line});
+		line += disasm.text;
+		m_disassembly.emplace_back(DisassemblyLine{addr, visited, std::move(disasm), line});
 	}
 }
 
@@ -357,7 +476,7 @@ void guru::Debugger::DrawCpuRegisters()
 		{
 			if (ImGui::MenuItem("Goto Address"))
 			{
-				m_app->ShowAddrInMemoryEditor(regs.a[i]);
+				m_app->ShowMemInMemoryEditor(regs.a[i], 0);
 			}
 
 			ImGui::EndPopup();
@@ -390,7 +509,7 @@ void guru::Debugger::DrawCpuRegisters()
 	{
 		if (ImGui::MenuItem("Goto Address"))
 		{
-			m_app->ShowAddrInMemoryEditor(regs.pc);
+			m_app->ShowMemInMemoryEditor(regs.pc, 0);
 		}
 
 		ImGui::EndPopup();
@@ -403,7 +522,7 @@ void guru::Debugger::DrawCpuRegisters()
 	{
 		if (ImGui::MenuItem("Goto Address"))
 		{
-			m_app->ShowAddrInMemoryEditor(regs.altA7);
+			m_app->ShowMemInMemoryEditor(regs.altA7, 0);
 		}
 
 		ImGui::EndPopup();

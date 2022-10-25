@@ -77,7 +77,7 @@ namespace guru
 
 		void SetSymbolsFile(const std::string& symbolsFile);
 
-		void ShowAddrInMemoryEditor(uint32_t addr);
+		void ShowMemInMemoryEditor(uint32_t addr, uint32_t size);
 
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;

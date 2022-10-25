@@ -32,7 +32,7 @@ bool guru::MemoryEditor::Draw()
 	return m_imMemEditor->Open;
 }
 
-void guru::MemoryEditor::GotoAddr(uint32_t addr)
+void guru::MemoryEditor::GotoAndHighlightMem(uint32_t addr, uint32_t size)
 {
-	m_imMemEditor->GotoAddrAndHighlight(addr, addr);
+	m_imMemEditor->GotoAddrAndHighlight(addr, addr + size);
 }
