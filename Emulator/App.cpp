@@ -16,6 +16,7 @@
 #include "util/strings.h"
 #include "util/stream.h"
 #include "util/platform.h"
+#include "util/ini_file.h"
 
 #include <imgui.h>
 #include <memory>
@@ -148,13 +149,17 @@ namespace
 
 }
 
-guru::AmigaApp::AmigaApp(const std::string& resDir, const std::string& romFile)
+guru::AmigaApp::AmigaApp(const std::filesystem::path& programDir, const std::filesystem::path& configDir)
+	: m_programDir(programDir)
+	, m_configDir(configDir)
 {
+	LoadSettings();
+
 	std::vector<uint8_t> rom;
 
-	if (!romFile.empty())
+	if (!m_romFile.empty())
 	{
-		rom = std::move(LoadRom(romFile));
+		rom = std::move(LoadRom(m_romFile));
 	}
 	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom));
 	m_symbols = std::make_unique<am::Symbols>();
@@ -382,7 +387,7 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 std::vector<uint8_t> guru::AmigaApp::LoadRom(const std::string& romFile) const
 {
 	std::filesystem::path file(romFile);
-	const auto displayFilename = file.filename().u8string();
+	const auto displayFilename = file.filename().string();
 
 	std::vector<uint8_t> rom;
 	if (!util::LoadBinaryFile(romFile, rom))
@@ -407,7 +412,7 @@ std::vector<uint8_t> guru::AmigaApp::LoadRom(const std::string& romFile) const
 	auto romkeyFile = file.parent_path() / "rom.key";
 	std::vector<uint8_t> romkey;
 
-	if (!util::LoadBinaryFile(romkeyFile.u8string(), romkey))
+	if (!util::LoadBinaryFile(romkeyFile.string(), romkey))
 	{
 		printf("ERROR: rom '%s' was encypted but rom.key file not available (must be in same directory).\n", displayFilename.c_str());
 		return rom;
@@ -541,14 +546,14 @@ void guru::AmigaApp::SetSymbolsFile(const std::string& symbolsFile)
 	m_symbols->Load();
 }
 
-std::filesystem::path guru::AmigaApp::GetLocalAppDir() const
+std::filesystem::path guru::AmigaApp::GetLocalAppDir()
 {
 	auto appPath = util::GetLocalDataDirectory();
 	appPath /= "Guru Amiga";
 	return appPath;
 }
 
-std::filesystem::path guru::AmigaApp::GetOrCreateLocalAppDir() const
+std::filesystem::path guru::AmigaApp::GetOrCreateLocalAppDir()
 {
 	auto appPath = GetLocalAppDir();
 	std::filesystem::create_directory(appPath);
@@ -593,7 +598,7 @@ void guru::AmigaApp::SaveSnapshot(const std::filesystem::path& file)
 
 }
 
-void guru::AmigaApp::OpenMemoryEditor() 
+void guru::AmigaApp::OpenMemoryEditor()
 {
 	if (!m_memoryEditor)
 	{
@@ -603,8 +608,42 @@ void guru::AmigaApp::OpenMemoryEditor()
 	ImGui::SetWindowFocus("Memory Editor");
 }
 
-void guru::AmigaApp::ShowAddrInMemoryEditor(uint32_t addr) 
+void guru::AmigaApp::ShowMemInMemoryEditor(uint32_t addr, uint32_t size)
 {
 	OpenMemoryEditor();
-	m_memoryEditor->GotoAddr(addr);
+	m_memoryEditor->GotoAndHighlightMem(addr, size);
+}
+
+void guru::AmigaApp::LoadSettings()
+{
+	auto appDir = GetOrCreateLocalAppDir();
+	auto [res, ini, inierrors] = util::LoadIniFile(appDir / "guru.ini");
+
+	if (res != util::IniLoadResult::Ok)
+		return;
+
+	{
+		auto systemSection = GetSection(ini, "System");
+		if (auto romFile = GetStringKey(systemSection, "rom"))
+		{
+			m_romFile = romFile.value();
+		}
+	}
+}
+
+void guru::AmigaApp::SaveSettings()
+{
+	util::Ini ini;
+	{
+		auto& systemSection = ini.m_sections["System"];
+		SetStringKey(systemSection, "rom", m_romFile);
+	}
+
+	auto appDir = GetOrCreateLocalAppDir();
+	util::SaveIniFile(ini, appDir / "guru.ini");
+}
+
+void guru::AmigaApp::Shutdown()
+{
+	SaveSettings();
 }

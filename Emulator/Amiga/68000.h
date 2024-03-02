@@ -126,9 +126,6 @@ namespace cpu
 		template <typename S>
 		void Stream(S& s);
 
-		void WriteToStream(std::ostream& os) const;
-		void ReadFromStream(std::istream& is);
-
 	private:
 
 		bool UnimplementOpcode(int& delay);

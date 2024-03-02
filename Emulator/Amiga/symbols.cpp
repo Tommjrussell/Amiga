@@ -42,7 +42,7 @@ am::SymLoadResults am::Symbols::Load()
 		if (t.type == Token::Type::End)
 			continue;
 
-		if (t.type != Token::Type::Int)
+		if (t.type != Token::Type::Unsigned)
 		{
 			++res.numErrors;
 			if (res.errorLine == -1)
@@ -52,7 +52,7 @@ am::SymLoadResults am::Symbols::Load()
 			continue;
 		}
 
-		uint32_t addr = t.num;
+		uint32_t addr = t.numUnsigned;
 
 		t = util::GetToken(line, off);
 
@@ -125,7 +125,7 @@ am::SymLoadResults am::Symbols::Load()
 		{
 			Subroutine sub;
 			sub.start = addr;
-			sub.end = t.num;
+			sub.end = t.numUnsigned;
 
 			t = util::GetToken(line, off);
 

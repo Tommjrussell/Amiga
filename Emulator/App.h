@@ -41,8 +41,10 @@ namespace guru
 	class AmigaApp
 	{
 	public:
-		explicit AmigaApp(const std::string& resDir, const std::string& romFile);
+		explicit AmigaApp(const std::filesystem::path& programDir, const std::filesystem::path& configDir);
 		~AmigaApp();
+
+		void Shutdown();
 
 		bool IsRunning() const { return m_isRunning; }
 		void SetRunning(bool running);
@@ -79,19 +81,30 @@ namespace guru
 
 		void ShowMemInMemoryEditor(uint32_t addr, uint32_t size);
 
+		const std::filesystem::path& GetProgramDir() const
+		{
+			return m_programDir;
+		}
+
+		static std::filesystem::path GetLocalAppDir();
+		static std::filesystem::path GetOrCreateLocalAppDir();
+
 	private:
 		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
 		void ConvertAndSendKeyCode(util::Key key, bool down);
-
-		std::filesystem::path GetLocalAppDir() const;
-		std::filesystem::path GetOrCreateLocalAppDir() const;
 
 		void LoadSnapshot(const std::filesystem::path& file);
 		void SaveSnapshot(const std::filesystem::path& file);
 
 		void OpenMemoryEditor();
 
+		void LoadSettings();
+		void SaveSettings();
+
 	private:
+		std::filesystem::path m_programDir;
+		std::filesystem::path m_configDir;
+
 		bool m_isQuitting = false;
 		bool m_useCrtEmulation = true;
 		bool m_joystickEmulation = false;
@@ -128,5 +141,7 @@ namespace guru
 		JoystickState m_emulatedJoystickState = {};
 
 		std::map<util::Key, uint8_t> m_keyMap;
+
+		std::string m_romFile;
 	};
 }

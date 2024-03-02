@@ -1,9 +1,9 @@
 #pragma once
 
 #include <gl/gl3w.h>
-#include <string>
+#include <filesystem>
 
 namespace platform_glfw
 {
-	GLuint LoadShaders(const std::string& vertexShaderFile, const std::string& fragmentShaderFile);
+	GLuint LoadShaders(const std::filesystem::path& vertexShaderFile, const std::filesystem::path& fragmentShaderFile);
 }

@@ -56,7 +56,7 @@ namespace guru
 		explicit Renderer(AmigaApp* app);
 		~Renderer();
 
-		bool Init(const std::string& resDir, int width, int height);
+		bool Init(const std::filesystem::path& resourceDir, int width, int height);
 		void SetInputCallbacks(bool amigaHasfocus);
 		void SetScreenImage(const am::ScreenBuffer* screen);
 		void DrawScreen(int screenWidth, int screenHeight, bool useCrtEmulation, bool evenFrame, int magAmount);
@@ -155,7 +155,7 @@ namespace guru
 		glfwTerminate();
 	}
 
-	bool Renderer::Init(const std::string& resourceDir, int width, int height)
+	bool Renderer::Init(const std::filesystem::path& resourceDir, int width, int height)
 	{
 		using namespace platform_glfw;
 
@@ -166,7 +166,7 @@ namespace guru
 		}
 
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
 
 		m_window = glfwCreateWindow(width, height, title, NULL, NULL);
 		if (!m_window)
@@ -183,11 +183,11 @@ namespace guru
 		glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 
-		m_programNoEffectID = LoadShaders(resourceDir + "\\shaders\\normal.vert", resourceDir + "\\shaders\\normal.frag");
+		m_programNoEffectID = LoadShaders(resourceDir / "shaders" / "normal.vert", resourceDir / "shaders" / "normal.frag");
 		if (m_programNoEffectID == 0)
 			return false;
 
-		m_programCrtID = LoadShaders(resourceDir + "\\shaders\\crt.vert", resourceDir + "\\shaders\\crt.frag");
+		m_programCrtID = LoadShaders(resourceDir / "shaders" / "crt.vert", resourceDir / "shaders" / "crt.frag");
 		if (m_programCrtID == 0)
 			return false;
 
@@ -415,10 +415,13 @@ namespace guru
 namespace guru
 {
 
-	bool Run(int width, int height, const std::string& resourceDir, AmigaApp& app)
+	bool Run(int width, int height, AmigaApp& app)
 	{
 		Renderer renderer(&app);
-		if (!renderer.Init(resourceDir, width, height))
+
+		auto& resDir = app.GetProgramDir();
+
+		if (!renderer.Init(resDir, width, height))
 			return false;
 
 		OpenAlPlayer audioPlayer;
@@ -447,6 +450,7 @@ namespace guru
 			renderer.Render(app.UseCrtEmulation());
 		}
 
+		app.Shutdown();
 		audioPlayer.Shutdown();
 
 		return true;

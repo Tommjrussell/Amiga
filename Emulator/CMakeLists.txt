@@ -1,6 +1,6 @@
-﻿cmake_minimum_required (VERSION 3.8)
+﻿cmake_minimum_required (VERSION 3.8..3.28)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 find_package(glfw3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -24,6 +24,7 @@ add_executable (AmigaEmulator
 	"util/log.h" "util/log.cpp"
 	"util/tokens.h" "util/tokens.cpp"
 	"util/stream.h"
+	"util/ini_file.h" "util/ini_file.cpp"
 	"debugger.cpp" "debugger.h"
 	"custom_chips_debugger.cpp" "custom_chips_debugger.h"
 	"variable_watch.cpp" "variable_watch.h"

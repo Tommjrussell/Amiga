@@ -6,23 +6,27 @@
 
 int main(int argc, char** argv)
 {
-	std::string resDir = ".";
+	std::filesystem::path programPath;
+	std::filesystem::path configurationPath;
+
+	std::string programDirString = ".";
+	std::string configDirString;
 	std::string romFile;
 	std::string df0;
 	std::string symbolsFile;
 
 	cxxopts::Options options("guru", "Guru Amiga Emulator");
 	options.add_options()
-		("r,res", "Path to resource directory", cxxopts::value<std::string>()->default_value(""))
-		("m,rom", "Path to rom file", cxxopts::value<std::string>()->default_value(""))
+		("p,programDir", "Path to program directory", cxxopts::value<std::string>()->default_value(""))
+		("c,configDir", "Path to use as local config directory", cxxopts::value<std::string>()->default_value(""))
 		("df0", "disk image file for drive DF0", cxxopts::value<std::string>()->default_value(""))
 		("syms", "symbols file for disassembler", cxxopts::value<std::string>()->default_value(""));
 
 	try
 	{
 		auto result = options.parse(argc, argv);
-		resDir = result["res"].as<std::string>();
-		romFile = result["rom"].as<std::string>();
+		programDirString = result["programDir"].as<std::string>();
+		configDirString = result["configDir"].as<std::string>();
 		df0 = result["df0"].as<std::string>();
 		symbolsFile = result["syms"].as<std::string>();
 	}
@@ -33,8 +37,25 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	guru::AmigaApp app(resDir, romFile);
+	if (!programDirString.empty())
+	{
+		programPath = programDirString;
+	}
+	else
+	{
+		programPath = std::filesystem::current_path();
+	}
 
+	if (!configDirString.empty())
+	{
+		configurationPath = configDirString;
+	}
+	else
+	{
+		configurationPath = guru::AmigaApp::GetOrCreateLocalAppDir();
+	}
+
+	guru::AmigaApp app(programPath, configurationPath);
 	if (!df0.empty())
 	{
 		app.SetDiskImage(0, df0);
@@ -45,5 +66,5 @@ int main(int argc, char** argv)
 		app.SetSymbolsFile(symbolsFile);
 	}
 
-	return guru::Run(1024, 768, resDir, app) ? 0 : 1;
+	return guru::Run(1024, 768, app) ? 0 : 1;
 }

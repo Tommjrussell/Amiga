@@ -132,7 +132,7 @@ std::vector<std::string> guru::ListFilesFromZip(const std::filesystem::path& zip
 
 bool guru::LoadDiskImage(const std::filesystem::path& path, std::string_view archFile, std::vector<uint8_t>& image, std::string& name)
 {
-	name = path.filename().generic_u8string();
+	name = path.filename().generic_string();
 
 	bool isGood = false;
 

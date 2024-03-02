@@ -37,31 +37,31 @@ namespace
 	}
 }
 
-GLuint  platform_glfw::LoadShaders(const std::string& vertexShaderFile, const std::string& fragmentShaderFile)
+GLuint  platform_glfw::LoadShaders(const std::filesystem::path& vertexShaderFile, const std::filesystem::path& fragmentShaderFile)
 {
 	GLuint vertexShaderID = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 
 	std::string vertexShaderCode;
-	if (!util::LoadUtf8File(vertexShaderFile, vertexShaderCode))
+	if (!util::LoadUtf8File(vertexShaderFile.string(), vertexShaderCode))
 	{
 		std::cerr << "Error : Cannot read vertex shader file '" << vertexShaderFile << "'\n";
 		return 0;
 	}
 
 	std::string fragmentShaderCode;
-	if (!util::LoadUtf8File(fragmentShaderFile, fragmentShaderCode))
+	if (!util::LoadUtf8File(fragmentShaderFile.string(), fragmentShaderCode))
 	{
 		std::cerr << "Error : Cannot read fragment shader file '" << fragmentShaderFile << "'\n";
 		return 0;
 	}
 
-	if (!Compile(vertexShaderFile, vertexShaderCode, vertexShaderID))
+	if (!Compile(vertexShaderFile.string(), vertexShaderCode, vertexShaderID))
 	{
 		return 0;
 	}
 
-	if (!Compile(fragmentShaderFile, fragmentShaderCode, fragmentShaderID))
+	if (!Compile(fragmentShaderFile.string(), fragmentShaderCode, fragmentShaderID))
 	{
 		glDeleteShader(vertexShaderID);
 		return 0;

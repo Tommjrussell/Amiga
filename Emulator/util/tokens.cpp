@@ -1,5 +1,6 @@
 #include "tokens.h"
 #include <ctype.h>
+#include <charconv>
 
 namespace
 {
@@ -69,47 +70,120 @@ namespace
 		using namespace util;
 
 		const size_t end = input.length();
-		Token t = { Token::Type::Int };
 
-		bool isHex = false;
+		bool negative = false;
 
-		if (input[off] == '0' && (off + 2) < end)
+		if (input[off] == '-')
 		{
-			if (input[off + 1] == 'x' || input[off + 1] == 'X')
-			{
-				isHex = true;
-				off += 2;
-			}
+			off++;
+			negative = true;
+		}
+		else if (input[off] == '+')
+		{
+			off++;
 		}
 
-		uint32_t value = 0;
-
-		while (off < end)
+		if ((end - off) > 2 && input[off] == '0' && ::toupper(input[off + 1]) == 'X')
 		{
-			char c = input[off];
+			uint64_t value = 0;
 
-			if (isHex)
+			off += 2;
+			while (off < end)
 			{
+				char c = input[off];
+
 				if (!isxdigit(c))
 					break;
 
 				value <<= 4;
 				value |= HexCharToInt(c);
+
+				++off;
+			}
+
+			Token t;
+			if (negative)
+			{
+				t.type = Token::Type::Int;
+				t.numSigned = -int64_t(value);
 			}
 			else
 			{
-				if (!isdigit(c))
-					break;
-
-				value *= 10;
-				value += (c - '0');
+				t.type = Token::Type::Unsigned;
+				t.numUnsigned = value;
 			}
-
-			++off;
+			return t;
 		}
 
-		t.num = value;
-		return t;
+		auto startOff = off;
+
+		enum NumState
+		{
+			PreDecimal,
+			PostDecimal,
+			End,
+		};
+
+		NumState state = PreDecimal;
+		bool isDecimal = false;
+
+		while (state != End && off < end)
+		{
+			char c = input[off++];
+
+			switch (state)
+			{
+			case PreDecimal:
+
+				if (c == '.')
+				{
+					state = PostDecimal;
+					isDecimal = true;
+					break;
+				}
+
+				if (::isdigit(c))
+					break;
+
+
+				state = End;
+				break;
+
+			case PostDecimal:
+				if (::isdigit(c))
+					break;
+
+				state = End;
+				break;
+			}
+		}
+
+		if (isDecimal)
+		{
+			double value = 0.0;
+			std::from_chars(input.data() + startOff, input.data() + off, value);
+			Token t = { .type = Token::Type::Float };
+			t.fpNum = value;
+			return t;
+		}
+		else
+		{
+			uint64_t value = 0;
+			std::from_chars(input.data() + startOff, input.data() + off, value);
+
+			Token t;
+			if (negative)
+			{
+				t.type = Token::Type::Int;
+				t.numSigned = -int64_t(value);
+			}
+			else
+			{
+				t.type = Token::Type::Unsigned;
+				t.numUnsigned = value;
+			}
+			return t;
+		}
 	}
 }
 
@@ -117,34 +191,54 @@ util::Token util::GetToken(const std::string& input, size_t& off)
 {
 	const size_t end = input.length();
 
-	while (off < end)
+	char c = '\0';
+
+	for (; off < end; ++off)
 	{
-		char c = input[off];
+		c = input[off];
 
-		if (::isblank(c))
+		if (!::isblank(c))
 		{
-			++off;
-			continue;
-		}
-
-		if (c == ';')
-		{
-			// rest of string is comment
 			break;
-		}
-		if (isalpha(c) || c == '_')
-		{
-			return GetName(input, off);
-		}
-		else if (c == '\"')
-		{
-			return GetString(input, off);
-		}
-		else if (isdigit(c))
-		{
-			return GetNumber(input, off);
 		}
 	}
 
-	return { Token::Type::End };
+	if (off == end || c == ';')
+		return { Token::Type::End };
+
+	if (isalpha(c) || c == '_')
+	{
+		return GetName(input, off);
+	}
+
+	if (c == '\"')
+	{
+		return GetString(input, off);
+	}
+
+	if (isdigit(c) || c == '+' || c == '-' || c == '.')
+	{
+		return GetNumber(input, off);
+	}
+
+	if (c == '=')
+	{
+		++off;
+		return { Token::Type::Equal };
+	}
+
+	if (c == '[')
+	{
+		++off;
+		return { Token::Type::OpenSquareBracket };
+	}
+
+	if (c == ']')
+	{
+		++off;
+		return { Token::Type::CloseSquareBracket };
+	}
+
+	return { Token::Type::Bad };
+
 }

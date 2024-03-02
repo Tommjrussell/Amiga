@@ -14,11 +14,21 @@ namespace util
 			Name,
 			String,
 			Int,
+			Unsigned,
+			Float,
+
+			// Symbols
+			Equal,
+			OpenSquareBracket,
+			CloseSquareBracket,
+
 			End,
 		};
 
 		Type type;
-		uint32_t num;
+		uint64_t numUnsigned;
+		int64_t numSigned;
+		double fpNum;
 		std::string str;
 	};
 

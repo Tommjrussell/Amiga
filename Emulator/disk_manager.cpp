@@ -94,7 +94,7 @@ bool guru::DiskManager::Draw()
 
 		if (ok)
 		{
-			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, file.generic_u8string(), name, std::move(image));
+			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, file.generic_string(), name, std::move(image));
 		}
 	};
 
