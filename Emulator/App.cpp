@@ -17,6 +17,7 @@
 #include "util/stream.h"
 #include "util/platform.h"
 #include "util/ini_file.h"
+#include "util/imgui_extras.h"
 
 #include <imgui.h>
 #include <memory>
@@ -25,6 +26,8 @@
 
 namespace
 {
+	const guru::FrontEndSettings kDefaultFrontEndSettings;
+
 	constexpr int PAL_CClockFreq = 3546895;
 	constexpr int NTSC_CClockFreq = 3579545;
 
@@ -147,7 +150,94 @@ namespace
 		{ Key::KEY_RIGHT_SUPER,   0x67 },
 	};
 
+	class SettingsWindow : public guru::Dialog
+	{
+	public:
+		explicit SettingsWindow(guru::AppSettings& appSettings, guru::FrontEndSettings& feSettings)
+			: m_appSettings(&appSettings)
+			, m_feSettings(&feSettings)
+		{
+			strncpy(m_adfDirBuffer, m_appSettings->adfDir.data(), sizeof(m_adfDirBuffer));
+			strncpy(m_romFileBuffer, m_appSettings->romFile.data(), sizeof(m_romFileBuffer));
+		}
+
+		bool Draw() override
+		{
+			using util::ActiveButton;
+
+			bool open = true;
+			ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+			bool expanded = ImGui::Begin("Settings", &open);
+
+			if (!(open && expanded))
+			{
+				ImGui::End();
+				return open;
+			}
+
+			if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None))
+			{
+				if (ImGui::BeginTabItem("Display"))
+				{
+					ImGui::Checkbox("Use Crt Shader", &m_feSettings->useCrtEmulation);
+
+					ImGui::SliderFloat("Horizontal Warp", &m_feSettings->crtWarpX, 0, .3f);
+					ImGui::SliderFloat("Vertical Warp", &m_feSettings->crtWarpY, 0, .3f);
+
+					if (ImGui::Button("Default Warp"))
+					{
+						m_feSettings->crtWarpX = kDefaultFrontEndSettings.crtWarpX;
+						m_feSettings->crtWarpY = kDefaultFrontEndSettings.crtWarpY;
+					}
+					ImGui::SliderFloat("Brightness Adjust", &m_feSettings->brightnessAdjust, 0.1f, 2.0f);
+
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("Dirs"))
+				{
+					if (ActiveButton("Apply", m_adfDirModified))
+					{
+						m_appSettings->adfDir = m_adfDirBuffer;
+						m_adfDirModified = false;
+					}
+					ImGui::SameLine();
+					if (ImGui::InputText("ADF directory", m_adfDirBuffer, sizeof(m_adfDirBuffer)))
+					{
+						m_adfDirModified = true;
+					}
+
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("System"))
+				{
+					if (ActiveButton("Apply", m_romFileModified))
+					{
+						m_appSettings->romFile = m_romFileBuffer;
+						m_romFileModified = false;
+					}
+					ImGui::SameLine();
+					if (ImGui::InputText("Rom File", m_romFileBuffer, sizeof(m_romFileBuffer)))
+					{
+						m_romFileModified = true;
+					}
+				}
+				ImGui::EndTabBar();
+			}
+
+			ImGui::End();
+			return open;
+		}
+
+	private:
+		guru::AppSettings* m_appSettings;
+		guru::FrontEndSettings* m_feSettings;
+		char m_adfDirBuffer[256] = { '\0' };
+		char m_romFileBuffer[256] = { '\0' };
+		bool m_adfDirModified = false;
+		bool m_romFileModified = false;
+	};
 }
+
 
 guru::AmigaApp::AmigaApp(const std::filesystem::path& programDir, const std::filesystem::path& configDir)
 	: m_programDir(programDir)
@@ -157,9 +247,9 @@ guru::AmigaApp::AmigaApp(const std::filesystem::path& programDir, const std::fil
 
 	std::vector<uint8_t> rom;
 
-	if (!m_romFile.empty())
+	if (!m_settings.romFile.empty())
 	{
-		rom = std::move(LoadRom(m_romFile));
+		rom = std::move(LoadRom(m_settings.romFile));
 	}
 	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom));
 	m_symbols = std::make_unique<am::Symbols>();
@@ -294,7 +384,7 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 			{
 				if (!m_diskManager)
 				{
-					m_diskManager = std::make_unique<DiskManager>(m_amiga.get());
+					m_diskManager = std::make_unique<DiskManager>(this);
 				}
 			}
 
@@ -333,8 +423,12 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 
 		if (ImGui::BeginMenu("Options"))
 		{
-			ImGui::MenuItem("CRT Emulation", "", &m_useCrtEmulation);
-			ImGui::MenuItem("Joystick Emulation", "", &m_joystickEmulation);
+			if (ImGui::MenuItem("Settings", ""))
+			{
+				m_displayOptionsWindows = std::make_unique<SettingsWindow>(m_settings, m_feSettings);
+			}
+
+			ImGui::MenuItem("Joystick Emulation", "", &m_settings.joystickEmulation);
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Arrow keys + ctrl simulate joystick input");
 			ImGui::EndMenu();
@@ -371,6 +465,14 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 		if (!m_diskManager->Draw())
 		{
 			m_diskManager.reset();
+		}
+	}
+
+	if (m_displayOptionsWindows)
+	{
+		if (!m_displayOptionsWindows->Draw())
+		{
+			m_displayOptionsWindows.reset();
 		}
 	}
 
@@ -480,7 +582,7 @@ bool guru::AmigaApp::SetKey(int key, int action, int mods)
 	{
 		if (action == GLFW_PRESS || action == GLFW_RELEASE)
 		{
-			if (m_joystickEmulation)
+			if (m_settings.joystickEmulation)
 			{
 				switch (Key(key))
 				{
@@ -626,9 +728,49 @@ void guru::AmigaApp::LoadSettings()
 		auto systemSection = GetSection(ini, "System");
 		if (auto romFile = GetStringKey(systemSection, "rom"))
 		{
-			m_romFile = romFile.value();
+			m_settings.romFile = romFile.value();
 		}
 	}
+
+	{
+		auto displaySection = GetSection(ini, "Display");
+		if (auto useCrt = GetBoolKey(displaySection, "useCrt"))
+		{
+			m_feSettings.useCrtEmulation = useCrt.value();
+		}
+
+		if (auto crtWarpX = GetFloatKey(displaySection, "crtWarpX"))
+		{
+			m_feSettings.crtWarpX = float(crtWarpX.value());
+		}
+
+		if (auto crtWarpY = GetFloatKey(displaySection, "crtWarpY"))
+		{
+			m_feSettings.crtWarpY = float(crtWarpY.value());
+		}
+
+		if (auto brightnessAdjust = GetFloatKey(displaySection, "brightnessAdjust"))
+		{
+			m_feSettings.brightnessAdjust = float(brightnessAdjust.value());
+		}
+	}
+
+	{
+		auto section = GetSection(ini, "Directories");
+		if (auto adfDir = GetStringKey(section, "adfDirectories"))
+		{
+			m_settings.adfDir = adfDir.value();
+		}
+	}
+
+	{
+		auto inputSection = GetSection(ini, "Input");
+		if (auto joystickEmulation = GetBoolKey(inputSection, "joystickEmulation"))
+		{
+			m_settings.joystickEmulation = joystickEmulation.value();
+		}
+	}
+
 }
 
 void guru::AmigaApp::SaveSettings()
@@ -636,7 +778,24 @@ void guru::AmigaApp::SaveSettings()
 	util::Ini ini;
 	{
 		auto& systemSection = ini.m_sections["System"];
-		SetStringKey(systemSection, "rom", m_romFile);
+		SetStringKey(systemSection, "rom", m_settings.romFile);
+	}
+
+	{
+		auto& displaySection = ini.m_sections["Display"];
+		SetBoolKey(displaySection, "useCrt", m_feSettings.useCrtEmulation);
+		SetFloatKey(displaySection, "crtWarpX", m_feSettings.crtWarpX);
+		SetFloatKey(displaySection, "crtWarpY", m_feSettings.crtWarpY);
+		SetFloatKey(displaySection, "brightnessAdjust", m_feSettings.brightnessAdjust);
+	}
+	{
+		auto& directoriesSection = ini.m_sections["Directories"];
+		SetStringKey(directoriesSection, "adfDirectories", m_settings.adfDir);
+	}
+
+	{
+		auto& inputSection = ini.m_sections["Input"];
+		SetBoolKey(inputSection, "joystickEmulation", m_settings.joystickEmulation);
 	}
 
 	auto appDir = GetOrCreateLocalAppDir();

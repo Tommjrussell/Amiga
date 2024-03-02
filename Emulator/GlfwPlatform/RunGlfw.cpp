@@ -59,7 +59,7 @@ namespace guru
 		bool Init(const std::filesystem::path& resourceDir, int width, int height);
 		void SetInputCallbacks(bool amigaHasfocus);
 		void SetScreenImage(const am::ScreenBuffer* screen);
-		void DrawScreen(int screenWidth, int screenHeight, bool useCrtEmulation, bool evenFrame, int magAmount);
+		void DrawScreen(int screenWidth, int screenHeight, bool evenFrame, int magAmount);
 		void HandleInput();
 
 		int Width() const
@@ -78,7 +78,7 @@ namespace guru
 		}
 
 		void NewFrame();
-		void Render(bool useCrtEmulation);
+		void Render();
 
 	private:
 		GLFWwindow* m_window;
@@ -318,9 +318,11 @@ namespace guru
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, kScreenTextureWidth, kScreenTextureHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, m_textureData->data());
 	}
 
-	void Renderer::DrawScreen(int screenWidth, int screenHeight, bool useCrtEmulation, bool evenFrame, int magAmount)
+	void Renderer::DrawScreen(int screenWidth, int screenHeight, bool evenFrame, int magAmount)
 	{
-		GLuint program = useCrtEmulation
+		auto& settings = m_app->GetFrontEndSettings();
+
+		GLuint program = settings.useCrtEmulation
 			? m_programCrtID
 			: m_programNoEffectID;
 
@@ -357,6 +359,20 @@ namespace guru
 				glUniform1f(scanlineOffset, float(evenFrame ? 0.0f : 0.5f));
 			}
 
+			if (settings.useCrtEmulation)
+			{
+				const auto warp = glGetUniformLocation(program, "warp");
+				if (warp >= 0)
+				{
+					glUniform2f(warp, settings.crtWarpX, settings.crtWarpY);
+				}
+
+				const auto brightnessAdjust = glGetUniformLocation(program, "brightnessAdjust");
+				if (brightnessAdjust >= 0)
+				{
+					glUniform1f(brightnessAdjust, settings.brightnessAdjust);
+				}
+			}
 		}
 
 		// 1st attribute buffer : vertices
@@ -398,12 +414,12 @@ namespace guru
 		glfwGetFramebufferSize(m_window, &m_displayWidth, &m_displayHeight);
 	}
 
-	void Renderer::Render(bool useCrtEmulation)
+	void Renderer::Render()
 	{
 		glViewport(0, 0, m_displayWidth, m_displayHeight);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		DrawScreen(am::kScreenBufferWidth, am::kScreenBufferHeight, useCrtEmulation, false, 1);
+		DrawScreen(am::kScreenBufferWidth, am::kScreenBufferHeight, false, 1);
 
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -447,7 +463,7 @@ namespace guru
 			renderer.SetScreenImage(app.GetScreen());
 			renderer.NewFrame();
 			app.Render(renderer.Width(), renderer.Height());
-			renderer.Render(app.UseCrtEmulation());
+			renderer.Render();
 		}
 
 		app.Shutdown();

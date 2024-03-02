@@ -22,8 +22,11 @@ uniform vec2 screenSize;
 //uniform vec2 winSize;
 
 uniform float scanlineOffset;
+uniform float brightnessAdjust;
 
 uniform sampler2D myTextureSampler;
+
+uniform vec2 warp;
 
 // Emulated input resolution.
 //#if 0
@@ -37,21 +40,16 @@ uniform sampler2D myTextureSampler;
 // Hardness of scanline.
 //  -8.0 = soft
 // -16.0 = medium
-float hardScan = -16.0;
+float hardScan = -8.0;
 
 // Hardness of pixels in scanline.
 // -2.0 = soft
 // -4.0 = hard
 float hardPix = -2.0;
 
-// Display warp.
-// 0.0 = none
-// 1.0/8.0 = extreme
-vec2 warp = vec2(1.0/32.0, 1.0/24.0);
-
 // Amount of shadow mask.
-float maskDark = 0.8;//0.5;
-float maskLight = 1.2;//1.5;
+float maskDark = 0.5;
+float maskLight = 1.5;
 
 //------------------------------------------------------------------------
 
@@ -92,7 +90,7 @@ vec3 Fetch(vec2 pos,vec2 off)
 	//modpos.y *= 282.0/512.0;
 	modpos.x *= 672.0/1024.0;
 	modpos.y *= 272.0/512.0;
-	return ToLinear(texture(myTextureSampler,modpos,-16.0).rgb);
+	return ToLinear(texture(myTextureSampler,modpos,-16.0).rgb * brightnessAdjust);
 }
 
 // Distance in emulated pixels to nearest texel.
@@ -197,6 +195,6 @@ void main()
 	//	maskDark = maskLight=1.0;
 	//	pos = Warp(fragCoord.xy / screenSize);
 	//}
-	fragColor = Tri(pos) * Mask(fragCoord.xy);
+	fragColor = Tri(pos) * Mask(gl_FragCoord.xy * 1.000001);
 	fragColor = ToSrgb(fragColor);
 }

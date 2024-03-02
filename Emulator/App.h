@@ -38,6 +38,27 @@ namespace guru
 		uint32_t buttons;
 	};
 
+	struct AppSettings
+	{
+		bool joystickEmulation = false;
+		std::string adfDir;
+		std::string romFile;
+	};
+
+	struct FrontEndSettings
+	{
+		bool useCrtEmulation = false;
+		float crtWarpX = 1.0f / 32.0f;
+		float crtWarpY = 1.0f / 24.0f;
+		float brightnessAdjust = 1.0f;
+	};
+
+	class Dialog
+	{
+	public:
+		virtual bool Draw() = 0;
+	};
+
 	class AmigaApp
 	{
 	public:
@@ -45,6 +66,8 @@ namespace guru
 		~AmigaApp();
 
 		void Shutdown();
+
+		am::Amiga* GetAmiga() { return m_amiga.get(); }
 
 		bool IsRunning() const { return m_isRunning; }
 		void SetRunning(bool running);
@@ -54,9 +77,14 @@ namespace guru
 		bool Update();
 		void Render(int displayWidth, int displayHeight);
 
-		bool UseCrtEmulation() const
+		const FrontEndSettings& GetFrontEndSettings() const
 		{
-			return m_useCrtEmulation;
+			return m_feSettings;
+		}
+
+		const AppSettings& GetAppSettings() const
+		{
+			return m_settings;
 		}
 
 		bool SetKey(int key, int action, int mods);
@@ -106,13 +134,14 @@ namespace guru
 		std::filesystem::path m_configDir;
 
 		bool m_isQuitting = false;
-		bool m_useCrtEmulation = true;
-		bool m_joystickEmulation = false;
 		bool m_debuggerOpen = false;
 		bool m_ccDebuggerOpen = false;
 		bool m_variableWatchOpen = false;
 		bool m_isRunning = false;
 		bool m_isStarting = false;
+
+		AppSettings m_settings = {};
+		FrontEndSettings m_feSettings = {};
 
 		std::chrono::steady_clock::time_point m_last;
 
@@ -125,6 +154,7 @@ namespace guru
 		std::unique_ptr<DiskManager> m_diskManager;
 		std::unique_ptr<DiskActivity> m_diskActivity;
 		std::unique_ptr<LogViewer> m_logViewer;
+		std::unique_ptr<Dialog> m_displayOptionsWindows;
 
 		std::unique_ptr<am::Symbols> m_symbols;
 
@@ -141,7 +171,5 @@ namespace guru
 		JoystickState m_emulatedJoystickState = {};
 
 		std::map<util::Key, uint8_t> m_keyMap;
-
-		std::string m_romFile;
 	};
 }

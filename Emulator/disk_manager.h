@@ -10,23 +10,20 @@ namespace ImGui
 	class FileBrowser;
 }
 
-namespace am
-{
-	class Amiga;
-}
-
 namespace guru
 {
+	class AmigaApp;
+
 	class DiskManager
 	{
 	public:
-		explicit DiskManager(am::Amiga* amiga);
+		explicit DiskManager(guru::AmigaApp* app);
 		~DiskManager();
 
 		bool Draw();
 
 	private:
-		am::Amiga* m_amiga;
+		guru::AmigaApp* m_app;
 		std::unique_ptr<ImGui::FileBrowser> m_fileDialog;
 
 		bool m_loadFailed[4] = {};

@@ -1,6 +1,7 @@
 #include "disk_manager.h"
 
 #include "disk_image.h"
+#include "App.h"
 
 #include "amiga/amiga.h"
 
@@ -9,8 +10,8 @@
 #include <imgui.h>
 #include "3rd Party/imfilebrowser.h"
 
-guru::DiskManager::DiskManager(am::Amiga* amiga)
-	: m_amiga(amiga)
+guru::DiskManager::DiskManager(guru::AmigaApp* app)
+	: m_app(app)
 {
 	m_fileDialog = std::make_unique<ImGui::FileBrowser>();
 
@@ -35,25 +36,34 @@ bool guru::DiskManager::Draw()
 		return open;
 	}
 
+	auto amiga = m_app->GetAmiga();
+
 	static const char* driveNameLabels[4] = { "DF0: (internal)", "DF1:", "DF2:", "DF3:" };
 
 	for (int i = 0; i < 4; i++)
 	{
-		auto& diskName = m_amiga->GetDiskName(i);
+		auto& diskName = amiga->GetDiskName(i);
 
 		ImGui::BeginChild(driveNameLabels[i], ImVec2(640, 60), true, 0);
 		ImGui::Text(driveNameLabels[i]);
 
 		if (util::ActiveButton("Eject", !diskName.empty()))
 		{
-			m_amiga->EjectDisk(i);
+			amiga->EjectDisk(i);
 		}
 
 		ImGui::SameLine();
 
 		if (util::ActiveButton("Select...", true))
 		{
+			auto& settings = m_app->GetAppSettings();
+			std::filesystem::path adfPath(settings.adfDir);
+			if (std::filesystem::exists(adfPath))
+			{
+				m_fileDialog->SetPwd(adfPath);
+			}
 			m_fileDialog->Open();
+
 			m_selectedDrive = i;
 		}
 
@@ -85,7 +95,7 @@ bool guru::DiskManager::Draw()
 
 	m_fileDialog->Display();
 
-	auto LoadDiskFile = [this](const std::filesystem::path& file, std::string_view archFile)
+	auto LoadDiskFile = [this, amiga](const std::filesystem::path& file, std::string_view archFile)
 	{
 		std::vector<uint8_t> image;
 		std::string name;
@@ -94,7 +104,7 @@ bool guru::DiskManager::Draw()
 
 		if (ok)
 		{
-			m_loadFailed[m_selectedDrive] = !m_amiga->SetDisk(m_selectedDrive, file.generic_string(), name, std::move(image));
+			m_loadFailed[m_selectedDrive] = !amiga->SetDisk(m_selectedDrive, file.generic_string(), name, std::move(image));
 		}
 	};
 
