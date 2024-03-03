@@ -198,15 +198,15 @@ namespace am
 
 	namespace LogOptions
 	{
-		constexpr int Disk = 1;
-		constexpr int Timer = 2;
-		constexpr int Blitter = 4;
+		constexpr uint64_t Disk = 1;
+		constexpr uint64_t Timer = 2;
+		constexpr uint64_t Blitter = 4;
 	}
 
 	class Amiga : public cpu::IBus
 	{
 	public:
-		explicit Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom);
+		explicit Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom, util::Log* log);
 
 		void SetAudioPlayer(am::AudioPlayer* player)
 		{
@@ -293,21 +293,6 @@ namespace am
 		void SetMouseMove(int x, int y);
 
 		void QueueKeyPress(uint8_t keycode);
-
-		util::Log* GetLog()
-		{
-			return &m_log;
-		}
-
-		void SetLogOptions(int options)
-		{
-			m_logOptions = options;
-		}
-
-		int GetLogOptions() const
-		{
-			return m_logOptions;
-		}
 
 		void WriteSnapshot(std::ostream& os) const;
 		bool ReadSnapshot(std::istream& is);
@@ -521,8 +506,7 @@ namespace am
 		AudioBuffer m_audioBuffer;
 
 		// Logging
-		util::Log m_log = util::Log(2048);
-		int m_logOptions = 0;
+		util::Log* m_log = nullptr;
 	};
 
 }

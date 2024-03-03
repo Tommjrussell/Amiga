@@ -3,6 +3,8 @@
 #include "amiga/screen_buffer.h"
 #include "amiga/audio.h"
 
+#include "util/log.h"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -172,5 +174,7 @@ namespace guru
 		JoystickState m_emulatedJoystickState = {};
 
 		std::map<util::Key, uint8_t> m_keyMap;
+
+		util::Log m_log = util::Log(2048);
 	};
 }

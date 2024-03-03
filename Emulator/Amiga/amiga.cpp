@@ -325,9 +325,10 @@ namespace
 	}
 }
 
-am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom)
+am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom, util::Log* log)
 	: m_lastScreen(new ScreenBuffer)
 	, m_currentScreen(new ScreenBuffer)
+	, m_log(log)
 {
 	m_chipRam.resize(size_t(chipRamConfig));
 
@@ -1611,7 +1612,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		// Writing to this register will start the DMA if enabled bit is already set.
 		const bool currentlyEnabled = m_diskDma.secondaryDmaEnabled;
 
-		if (m_diskDma.inProgress && (m_logOptions & LogOptions::Disk))
+		if (m_diskDma.inProgress && m_log->IsLogging(LogOptions::Disk))
 		{
 			std::stringstream ss;
 			ss << "Disk DMA aborted"
@@ -1620,7 +1621,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 				<< " remaining=" << util::HexToString(uint16_t(m_diskDma.len))
 				<< " pos=" << m_diskDma.encodedSequenceCounter;
 
-			m_log.AddMessage(m_totalCClocks, ss.str());
+			m_log->AddMessage(m_totalCClocks, ss.str());
 		}
 
 		m_diskDma.secondaryDmaEnabled = (value & 0x8000) != 0;
@@ -1632,7 +1633,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 		{
 			StartDiskDMA();
 
-			if (m_logOptions & LogOptions::Disk)
+			if (m_log->IsLogging(LogOptions::Disk))
 			{
 				std::stringstream ss;
 				ss << "Disk DMA" << (m_diskDma.useWordSync ? " (sync)" : "")
@@ -1642,7 +1643,7 @@ void am::Amiga::WriteRegister(uint32_t regNum, uint16_t value)
 					<< " len=" << util::HexToString(uint16_t(m_diskDma.len))
 					<< " start=" << m_diskDma.encodedSequenceCounter;
 
-				m_log.AddMessage(m_totalCClocks, ss.str());
+				m_log->AddMessage(m_totalCClocks, ss.str());
 			}
 		}
 	}	break;
@@ -3296,7 +3297,7 @@ void am::Amiga::ProcessDriveCommands(uint8_t data)
 					drive.currCylinder--;
 			}
 
-			if (m_logOptions & LogOptions::Disk)
+			if (m_log->IsLogging(LogOptions::Disk))
 			{
 				std::stringstream ss;
 				ss << "Disk Stepped "
@@ -3304,7 +3305,7 @@ void am::Amiga::ProcessDriveCommands(uint8_t data)
 					<< " cyl=" << int(m_floppyDrive[0].currCylinder)
 					<< " side=" << int(m_floppyDrive[0].side);
 
-				m_log.AddMessage(m_totalCClocks, ss.str());
+				m_log->AddMessage(m_totalCClocks, ss.str());
 			}
 
 		}
@@ -3429,9 +3430,9 @@ void am::Amiga::DoDiskDMA()
 	m_diskDma.len--;
 	if (m_diskDma.len == 0)
 	{
-		if (m_logOptions & LogOptions::Disk)
+		if (m_log->IsLogging(LogOptions::Disk))
 		{
-			m_log.AddMessage(m_totalCClocks, "Disk DMA Finished.");
+			m_log->AddMessage(m_totalCClocks, "Disk DMA Finished.");
 		}
 
 		m_diskDma.inProgress = false;

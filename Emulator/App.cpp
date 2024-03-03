@@ -157,8 +157,8 @@ namespace
 			: m_appSettings(&appSettings)
 			, m_feSettings(&feSettings)
 		{
-			strncpy(m_adfDirBuffer, m_appSettings->adfDir.data(), sizeof(m_adfDirBuffer));
-			strncpy(m_romFileBuffer, m_appSettings->romFile.data(), sizeof(m_romFileBuffer));
+			strncpy_s(m_adfDirBuffer, m_appSettings->adfDir.data(), sizeof(m_adfDirBuffer));
+			strncpy_s(m_romFileBuffer, m_appSettings->romFile.data(), sizeof(m_romFileBuffer));
 		}
 
 		bool Draw() override
@@ -251,7 +251,7 @@ guru::AmigaApp::AmigaApp(const std::filesystem::path& programDir, const std::fil
 	{
 		rom = std::move(LoadRom(m_settings.romFile));
 	}
-	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom));
+	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom), &m_log);
 	m_symbols = std::make_unique<am::Symbols>();
 
 	m_debugger = std::make_unique<Debugger>(this, m_amiga.get(), m_symbols.get());
@@ -392,7 +392,7 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 			{
 				if (!m_logViewer)
 				{
-					m_logViewer = std::make_unique<LogViewer>(m_amiga.get());
+					m_logViewer = std::make_unique<LogViewer>(&m_log);
 				}
 			}
 

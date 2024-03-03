@@ -1,11 +1,12 @@
 #include "log_viewer.h"
 
-#include "Amiga/amiga.h"
+#include "util/log.h"
+#include "amiga/amiga.h"
 
 #include <imgui.h>
 
-guru::LogViewer::LogViewer(am::Amiga* amiga)
-	: m_amiga(amiga)
+guru::LogViewer::LogViewer(util::Log* log)
+	: m_log(log)
 {
 }
 
@@ -25,12 +26,12 @@ bool guru::LogViewer::Draw()
 
 	if (ImGui::Button("Clear Log"))
 	{
-		m_amiga->GetLog()->Clear();
+		m_log->Clear();
 	}
 
-	int options = m_amiga->GetLogOptions();
+	uint64_t options = m_log->GetOptions();
 
-	auto LogOptionCheckBox = [&](const char* label, int flag)
+	auto LogOptionCheckBox = [&](const char* label, uint64_t flag)
 	{
 		bool setting = (options & flag) != 0;
 		if (ImGui::Checkbox(label, &setting))
@@ -43,7 +44,7 @@ bool guru::LogViewer::Draw()
 			{
 				options &= ~flag;
 			}
-			m_amiga->SetLogOptions(options);
+			m_log->SetOptions(options);
 		}
 	};
 
@@ -62,7 +63,7 @@ bool guru::LogViewer::Draw()
 
 	if (ImGui::BeginTable("log entry table", 2, flags, ImVec2(0, 0)))
 	{
-		auto& messages = m_amiga->GetLog()->GetMessages();
+		auto& messages = m_log->GetMessages();
 
 		ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
 		ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 96.0f);
