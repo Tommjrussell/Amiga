@@ -431,6 +431,12 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 			ImGui::MenuItem("Joystick Emulation", "", &m_settings.joystickEmulation);
 			if (ImGui::IsItemHovered())
 				ImGui::SetTooltip("Arrow keys + ctrl simulate joystick input");
+
+			if (ImGui::MenuItem("Fullscreen/Windowed", "", m_feSettings.fullScreen))
+			{
+				m_feSettings.fullScreen = !m_feSettings.fullScreen;
+			}
+
 			ImGui::EndMenu();
 		}
 

@@ -81,6 +81,9 @@ namespace guru
 		void Render();
 
 	private:
+		void ToggleFullScreen();
+
+	private:
 		GLFWwindow* m_window;
 		ImGuiContext* m_imguiContext = nullptr;
 
@@ -103,8 +106,15 @@ namespace guru
 		GLFWmousebuttonfun m_savedMouseButtonCallback = nullptr;
 		GLFWcursorposfun m_savedMouseMoveCallback = nullptr;
 
-		double m_previousMouseX;
-		double m_previousMouseY;
+		double m_previousMouseX = 0;
+		double m_previousMouseY = 0;
+
+		int m_windowedPosX = 0;
+		int m_windowedPosY = 0;
+		int m_windowedSizeX = 0;
+		int m_windowedSizeY = 0;
+
+		bool m_fullScreen = false;
 	};
 
 	void GLFWKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -416,6 +426,13 @@ namespace guru
 
 	void Renderer::Render()
 	{
+		auto& settings = m_app->GetFrontEndSettings();
+
+		if (settings.fullScreen != m_fullScreen)
+		{
+			ToggleFullScreen();
+		}
+
 		glViewport(0, 0, m_displayWidth, m_displayHeight);
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -424,6 +441,37 @@ namespace guru
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		glfwSwapBuffers(m_window);
+	}
+
+	void Renderer::ToggleFullScreen()
+	{
+		if (!m_fullScreen)
+		{
+			auto monitor = glfwGetPrimaryMonitor();
+			auto mode = glfwGetVideoMode(monitor);
+
+			glfwGetWindowPos(m_window, &m_windowedPosX, &m_windowedPosY);
+			glfwGetWindowSize(m_window, &m_windowedSizeX, &m_windowedSizeY);
+
+			glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+			glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+			glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+			glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
+			glfwSetWindowMonitor(m_window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+
+			glfwSwapInterval(1);
+		}
+		else
+		{
+			auto monitor = glfwGetPrimaryMonitor();
+			auto mode = glfwGetVideoMode(monitor);
+			glfwSetWindowMonitor(m_window, nullptr, m_windowedPosX, m_windowedPosY, m_windowedSizeX, m_windowedSizeY, mode->refreshRate);
+
+			glfwSwapInterval(1);
+		}
+
+		m_fullScreen = !m_fullScreen;
 	}
 
 }

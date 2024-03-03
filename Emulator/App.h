@@ -48,6 +48,7 @@ namespace guru
 	struct FrontEndSettings
 	{
 		bool useCrtEmulation = false;
+		bool fullScreen = false;
 		float crtWarpX = 1.0f / 32.0f;
 		float crtWarpY = 1.0f / 24.0f;
 		float brightnessAdjust = 1.0f;
