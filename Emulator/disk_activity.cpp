@@ -41,6 +41,8 @@ void guru::DiskActivity::Draw(int displayWidth, int displayHeight)
 			ImGui::SameLine();
 			ImVec2 p = ImGui::GetCursorScreenPos();
 			draw_list->AddRectFilled(p, ImVec2(p.x + 50, p.y + ImGui::GetTextLineHeight()), drive.motorOn ? activeCol : inactiveCol);
+			ImGui::SameLine();
+			ImGui::TextColored(ImColor(0,0,0), "  %d", drive.currCylinder);
 			ImGui::NewLine();
 
 			if (!drive.motorOn)

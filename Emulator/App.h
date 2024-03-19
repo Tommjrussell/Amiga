@@ -74,6 +74,7 @@ namespace guru
 
 		bool IsRunning() const { return m_isRunning; }
 		void SetRunning(bool running);
+		void Reset();
 
 		const am::ScreenBuffer* GetScreen() const;
 
@@ -121,7 +122,6 @@ namespace guru
 		static std::filesystem::path GetOrCreateLocalAppDir();
 
 	private:
-		std::vector<uint8_t> LoadRom(const std::string& romFile) const;
 		void ConvertAndSendKeyCode(util::Key key, bool down);
 
 		void LoadSnapshot(const std::filesystem::path& file);

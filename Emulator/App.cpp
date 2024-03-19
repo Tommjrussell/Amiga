@@ -19,6 +19,8 @@
 #include "util/ini_file.h"
 #include "util/imgui_extras.h"
 
+#include "3rd Party/imfilebrowser.h"
+
 #include <imgui.h>
 #include <memory>
 #include <fstream>
@@ -150,6 +152,106 @@ namespace
 		{ Key::KEY_RIGHT_SUPER,   0x67 },
 	};
 
+	constexpr char cloantoRomSig[] = "AMIROMTYPE1";
+	constexpr size_t cloantoRomSigLen = _countof(cloantoRomSig) - 1;
+
+	std::pair<bool, std::string> CheckRom(std::string_view romFile)
+	{
+		if (romFile.empty())
+		{
+			return { false, "No Rom File selected." };
+		}
+
+		std::filesystem::path file(romFile);
+		const auto displayFilename = file.filename().string();
+
+		if (!std::filesystem::exists(file))
+		{
+			return { false, "Rom file does not exist." };
+		}
+
+		auto size = std::filesystem::file_size(file);
+
+		if (size == 524'288)
+		{
+			// ok, assume unencrypted rom.
+			return { true, "File OK, unencrypted." };
+		}
+
+		if (size == 524'299)
+		{
+			std::vector<uint8_t> header;
+			if (!util::LoadBinaryHeader(std::string(romFile), header, cloantoRomSigLen))
+				return { false, "Rom file unaccessible." };
+
+			if (memcmp(header.data(), cloantoRomSig, cloantoRomSigLen) != 0)
+				return { false, "Rom file has unrecognised header." };
+
+			auto romkeyFile = file.parent_path() / "rom.key";
+			if (!std::filesystem::exists(romkeyFile))
+				return { false, "Rom encrypted but no rom.key file found." };
+
+			return { true, "File OK, encrypted." };
+		}
+
+		// Reject rom of any other size.
+		return { false, "Rom file was unexpected size (expected 512Kib)" };
+	}
+
+	std::vector<uint8_t> LoadRom(const std::string& romFile)
+	{
+		std::filesystem::path file(romFile);
+		const auto displayFilename = file.filename().string();
+
+		std::vector<uint8_t> rom;
+		if (!util::LoadBinaryFile(romFile, rom))
+		{
+			printf("ERROR: rom '%s' not loaded.\n", displayFilename.c_str());
+			return rom;
+		}
+
+		if (rom.size() < cloantoRomSigLen
+			|| memcmp(rom.data(), cloantoRomSig, cloantoRomSigLen) != 0)
+		{
+			printf("INFO : Rom file '%s' is unencrypted\n", displayFilename.c_str());
+			printf("INFO : Rom size %llu bytes.\n", rom.size());
+			return rom;
+		}
+
+		// It's a scrambled Cloanto rom file. Locate rom.key file to decrypt
+
+		auto romkeyFile = file.parent_path() / "rom.key";
+		std::vector<uint8_t> romkey;
+
+		if (!util::LoadBinaryFile(romkeyFile.string(), romkey))
+		{
+			printf("ERROR: rom '%s' was encypted but rom.key file not available (must be in same directory).\n", displayFilename.c_str());
+			return rom;
+		}
+
+		if (romkey.empty())
+		{
+			printf("ERROR: rom '%s' was encypted but rom.key file failed to load or was empty.\n", displayFilename.c_str());
+		}
+
+		size_t writePtr = 0;
+		size_t readPtr = cloantoRomSigLen;
+		size_t keyPtr = 0;
+
+		while (readPtr < rom.size())
+		{
+			rom[writePtr++] = rom[readPtr++] ^ romkey[keyPtr++];
+			if (keyPtr == romkey.size())
+				keyPtr = 0;
+		}
+
+		rom.resize(writePtr);
+
+		printf("INFO : Rom file '%s' successfully decrypted.\n", displayFilename.c_str());
+		printf("INFO : Rom size %llu bytes.\n", rom.size());
+		return rom;
+	}
+
 	class SettingsWindow : public guru::Dialog
 	{
 	public:
@@ -158,7 +260,9 @@ namespace
 			, m_feSettings(&feSettings)
 		{
 			strncpy_s(m_adfDirBuffer, m_appSettings->adfDir.data(), sizeof(m_adfDirBuffer));
-			strncpy_s(m_romFileBuffer, m_appSettings->romFile.data(), sizeof(m_romFileBuffer));
+
+			auto [romGood, why] = CheckRom(m_appSettings->romFile);
+			m_romFileStatusText = why;
 		}
 
 		bool Draw() override
@@ -210,31 +314,57 @@ namespace
 				}
 				if (ImGui::BeginTabItem("System"))
 				{
-					if (ActiveButton("Apply", m_romFileModified))
+					if (ImGui::Button("Select..."))
 					{
-						m_appSettings->romFile = m_romFileBuffer;
-						m_romFileModified = false;
+						if (!m_fileDialog)
+						{
+							m_fileDialog = std::make_unique<ImGui::FileBrowser>();
+							m_fileDialog->SetTitle("Select Rom Image");
+							m_fileDialog->SetTypeFilters({ ".rom" });
+
+						}
+						auto romPath = std::filesystem::path(m_appSettings->romFile);
+						if (romPath.has_parent_path())
+						{
+							m_fileDialog->SetPwd(romPath.parent_path());
+						}
+						m_fileDialog->Open();
 					}
 					ImGui::SameLine();
-					if (ImGui::InputText("Rom File", m_romFileBuffer, sizeof(m_romFileBuffer)))
-					{
-						m_romFileModified = true;
-					}
+					ImGui::InputText("##RomFile", const_cast<char*>(m_appSettings->romFile.c_str()), m_appSettings->romFile.length(), ImGuiInputTextFlags_ReadOnly);
+					ImGui::SameLine();
+					ImGui::Text(m_romFileStatusText.c_str());
 				}
 				ImGui::EndTabBar();
 			}
 
 			ImGui::End();
+
+			if (m_fileDialog)
+			{
+				m_fileDialog->Display();
+
+				if (m_fileDialog->HasSelected())
+				{
+					m_appSettings->romFile = m_fileDialog->GetSelected().string();
+					m_fileDialog->ClearSelected();
+					m_fileDialog.reset();
+					auto [romGood, why] = CheckRom(m_appSettings->romFile);
+					m_romFileStatusText = why;
+				}
+			}
+
 			return open;
 		}
 
 	private:
 		guru::AppSettings* m_appSettings;
 		guru::FrontEndSettings* m_feSettings;
+		std::unique_ptr<ImGui::FileBrowser> m_fileDialog;
 		char m_adfDirBuffer[256] = { '\0' };
-		char m_romFileBuffer[256] = { '\0' };
+		std::string m_romFileStatusText;
 		bool m_adfDirModified = false;
-		bool m_romFileModified = false;
+
 	};
 }
 
@@ -245,13 +375,14 @@ guru::AmigaApp::AmigaApp(const std::filesystem::path& programDir, const std::fil
 {
 	LoadSettings();
 
-	std::vector<uint8_t> rom;
+	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, &m_log);
 
 	if (!m_settings.romFile.empty())
 	{
-		rom = std::move(LoadRom(m_settings.romFile));
+		const auto rom = LoadRom(m_settings.romFile);
+		m_amiga->SetRom(rom);
 	}
-	m_amiga = std::make_unique<am::Amiga>(am::ChipRamConfig::ChipRam1Mib, std::move(rom), &m_log);
+
 	m_symbols = std::make_unique<am::Symbols>();
 
 	m_debugger = std::make_unique<Debugger>(this, m_amiga.get(), m_symbols.get());
@@ -285,6 +416,19 @@ void guru::AmigaApp::SetRunning(bool running)
 	if (running)
 	{
 		m_debugger->Refresh();
+	}
+}
+
+void guru::AmigaApp::Reset()
+{
+	if (!m_settings.romFile.empty())
+	{
+		const auto rom = LoadRom(m_settings.romFile);
+		m_amiga->SetRom(rom);
+	}
+	else
+	{
+		m_amiga->Reset();
 	}
 }
 
@@ -491,63 +635,6 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 	}
 
 };
-
-std::vector<uint8_t> guru::AmigaApp::LoadRom(const std::string& romFile) const
-{
-	std::filesystem::path file(romFile);
-	const auto displayFilename = file.filename().string();
-
-	std::vector<uint8_t> rom;
-	if (!util::LoadBinaryFile(romFile, rom))
-	{
-		printf("ERROR: rom '%s' not loaded.\n", displayFilename.c_str());
-		return rom;
-	}
-
-	static const char cloantoRomSig[] = "AMIROMTYPE1";
-	static const size_t cloantoRomSigLen = _countof(cloantoRomSig) - 1;
-
-	if (rom.size() < cloantoRomSigLen
-		|| memcmp(rom.data(), cloantoRomSig, cloantoRomSigLen) != 0)
-	{
-		printf("INFO : Rom file '%s' is unencrypted\n", displayFilename.c_str());
-		printf("INFO : Rom size %llu bytes.\n", rom.size());
-		return rom;
-	}
-
-	// It's a scrambled Cloanto rom file. Locate rom.key file to decrypt
-
-	auto romkeyFile = file.parent_path() / "rom.key";
-	std::vector<uint8_t> romkey;
-
-	if (!util::LoadBinaryFile(romkeyFile.string(), romkey))
-	{
-		printf("ERROR: rom '%s' was encypted but rom.key file not available (must be in same directory).\n", displayFilename.c_str());
-		return rom;
-	}
-
-	if (romkey.empty())
-	{
-		printf("ERROR: rom '%s' was encypted but rom.key file failed to load or was empty.\n", displayFilename.c_str());
-	}
-
-	size_t writePtr = 0;
-	size_t readPtr = cloantoRomSigLen;
-	size_t keyPtr = 0;
-
-	while (readPtr < rom.size())
-	{
-		rom[writePtr++] = rom[readPtr++] ^ romkey[keyPtr++];
-		if (keyPtr == romkey.size())
-			keyPtr = 0;
-	}
-
-	rom.resize(writePtr);
-
-	printf("INFO : Rom file '%s' successfully decrypted.\n", displayFilename.c_str());
-	printf("INFO : Rom size %llu bytes.\n", rom.size());
-	return rom;
-}
 
 const am::ScreenBuffer* guru::AmigaApp::GetScreen() const
 {

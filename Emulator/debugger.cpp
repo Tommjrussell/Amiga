@@ -606,7 +606,7 @@ void guru::Debugger::DrawControls()
 	if (ImGui::Button("Reset"))
 	{
 		m_amiga->ClearBreakpoint();
-		m_amiga->Reset();
+		m_app->Reset();
 		m_disassembly.clear();
 	}
 

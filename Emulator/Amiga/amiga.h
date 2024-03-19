@@ -12,6 +12,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <span>
 
 namespace am
 {
@@ -206,7 +207,9 @@ namespace am
 	class Amiga : public cpu::IBus
 	{
 	public:
-		explicit Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom, util::Log* log);
+		explicit Amiga(ChipRamConfig chipRamConfig, util::Log* log);
+
+		void SetRom(std::span<const uint8_t> rom);
 
 		void SetAudioPlayer(am::AudioPlayer* player)
 		{
@@ -227,7 +230,7 @@ namespace am
 
 		const ScreenBuffer* GetScreen() const
 		{
-			return m_lastScreen.get();
+			return m_running ? m_lastScreen.get() : m_currentScreen.get();
 		}
 
 		const cpu::M68000* GetCpu() const

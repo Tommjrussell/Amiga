@@ -325,26 +325,20 @@ namespace
 	}
 }
 
-am::Amiga::Amiga(ChipRamConfig chipRamConfig, std::vector<uint8_t> rom, util::Log* log)
+am::Amiga::Amiga(ChipRamConfig chipRamConfig, util::Log* log)
 	: m_lastScreen(new ScreenBuffer)
 	, m_currentScreen(new ScreenBuffer)
 	, m_log(log)
 {
 	m_chipRam.resize(size_t(chipRamConfig));
-
-	if (rom.empty())
-	{
-		m_rom.resize(512*1024, 0xcc);
-	}
-	else
-	{
-		m_rom = std::move(rom);
-	}
-
+	m_rom.resize(512*1024, 0xcc);
 	m_registers.resize(_countof(registerInfo), 0x0000);
-
 	m_m68000 = std::make_unique<cpu::M68000>(this);
+}
 
+void am::Amiga::SetRom(std::span<const uint8_t> rom)
+{
+	memcpy(m_rom.data(), rom.data(), std::min(rom.size(), m_rom.size()));
 	Reset();
 }
 
@@ -2334,6 +2328,7 @@ void am::Amiga::UpdateScreen()
 	{
 		// Swap the screens immediately once the bottom line is finished.
 		std::swap(m_currentScreen, m_lastScreen);
+		m_currentScreen->fill(0);
 		return;
 	}
 
