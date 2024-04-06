@@ -6,9 +6,9 @@
 
 namespace
 {
-	constexpr int overlayWidth = 120;
-	constexpr int overlayHeight = 80;
-	constexpr int overlayPadding = 20;
+	constexpr float overlayWidth = 6.0f;
+	constexpr float overlayHeight = 5.0f;
+	constexpr float overlayPadding = 1.0f;
 
 	constexpr int idleTimeoutLength = 200;
 }
@@ -21,11 +21,13 @@ guru::DiskActivity::DiskActivity(am::Amiga* amiga)
 
 void guru::DiskActivity::Draw(int displayWidth, int displayHeight)
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	static const auto activeCol = IM_COL32(0, 255, 0, 255);
 	static const auto inactiveCol = IM_COL32(0, 40, 0, 255);
 
-	ImGui::SetNextWindowPos(ImVec2(float(displayWidth - (overlayWidth + overlayPadding)), float(displayHeight - (overlayHeight + overlayPadding))));
-	ImGui::SetNextWindowSize(ImVec2(float(overlayWidth), float(overlayHeight)));
+	ImGui::SetNextWindowPos(ImVec2(displayWidth - scale * (overlayWidth + overlayPadding), displayHeight - scale * (overlayHeight + overlayPadding)));
+	ImGui::SetNextWindowSize(ImVec2(scale* overlayWidth, scale * overlayHeight));
 
 	ImGui::Begin("Disk Overlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground);
 
@@ -40,9 +42,9 @@ void guru::DiskActivity::Draw(int displayWidth, int displayHeight)
 			ImGui::Text("DF%d:", i);
 			ImGui::SameLine();
 			ImVec2 p = ImGui::GetCursorScreenPos();
-			draw_list->AddRectFilled(p, ImVec2(p.x + 50, p.y + ImGui::GetTextLineHeight()), drive.motorOn ? activeCol : inactiveCol);
+			draw_list->AddRectFilled(p, ImVec2(p.x + 3 * scale, p.y + ImGui::GetTextLineHeight()), drive.motorOn ? activeCol : inactiveCol);
 			ImGui::SameLine();
-			ImGui::TextColored(ImColor(0,0,0), "  %d", drive.currCylinder);
+			ImGui::TextColored(ImColor(0,0,0), "   %d", drive.currCylinder);
 			ImGui::NewLine();
 
 			if (!drive.motorOn)

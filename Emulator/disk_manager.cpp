@@ -25,7 +25,9 @@ guru::DiskManager::~DiskManager()
 
 bool guru::DiskManager::Draw()
 {
-	ImGui::SetNextWindowSize(ImVec2(660, 256), ImGuiCond_FirstUseEver);
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
+	ImGui::SetNextWindowSize(ImVec2(40 * scale, 15 * scale), ImGuiCond_FirstUseEver);
 
 	bool open = true;
 	bool expanded = ImGui::Begin("DiskManager", &open);
@@ -44,7 +46,10 @@ bool guru::DiskManager::Draw()
 	{
 		auto& diskName = amiga->GetDiskName(i);
 
-		ImGui::BeginChild(driveNameLabels[i], ImVec2(640, 60), true, 0);
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.4f * scale);
+
+		ImGui::BeginChild(driveNameLabels[i], ImVec2(0, 2.3 * scale), true, 0);
 		ImGui::Text(driveNameLabels[i]);
 
 		if (util::ActiveButton("Eject", !diskName.empty()))
@@ -68,7 +73,7 @@ bool guru::DiskManager::Draw()
 		}
 
 		ImGui::SameLine();
-		ImGui::PushItemWidth(480);
+
 		char buffer[512];
 		if (diskName.empty())
 		{
@@ -85,10 +90,12 @@ bool guru::DiskManager::Draw()
 
 		char driveFileId[10];
 		sprintf_s(driveFileId, "##DRIVE%02d", i);
+		ImGui::PushItemWidth(-1);
 		ImGui::InputText(driveFileId, buffer, 256, ImGuiInputTextFlags_ReadOnly);
 		ImGui::PopItemWidth();
 
 		ImGui::EndChild();
+		ImGui::PopStyleVar(2);
 	}
 
 	ImGui::End();
@@ -140,7 +147,7 @@ bool guru::DiskManager::Draw()
 	if (ImGui::BeginPopupModal("Select File...", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
 		ImGui::Text("Choose file from archive:");
-		ImGui::PushItemWidth(480);
+		ImGui::PushItemWidth(20 * scale);
 		if (ImGui::BeginListBox("##file selection"))
 		{
 			for (auto& file : m_archiveFiles)
@@ -156,7 +163,7 @@ bool guru::DiskManager::Draw()
 		}
 		ImGui::PopItemWidth();
 
-		if (ImGui::Button("Cancel", ImVec2(120, 0)))
+		if (ImGui::Button("Cancel"))
 		{
 			ImGui::CloseCurrentPopup();
 		}

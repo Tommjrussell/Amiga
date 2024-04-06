@@ -12,6 +12,8 @@
 #include <map>
 #include <filesystem>
 
+struct ImFont;
+
 namespace util
 {
 	enum class Key : int;
@@ -51,6 +53,7 @@ namespace guru
 	{
 		bool useCrtEmulation = false;
 		bool fullScreen = false;
+		bool highDPI = false;
 		float crtWarpX = 1.0f / 32.0f;
 		float crtWarpY = 1.0f / 24.0f;
 		float brightnessAdjust = 1.0f;
@@ -68,6 +71,7 @@ namespace guru
 		explicit AmigaApp(const std::filesystem::path& programDir, const std::filesystem::path& configDir);
 		~AmigaApp();
 
+		bool Setup();
 		void Shutdown();
 
 		am::Amiga* GetAmiga() { return m_amiga.get(); }
@@ -176,5 +180,8 @@ namespace guru
 		std::map<util::Key, uint8_t> m_keyMap;
 
 		util::Log m_log = util::Log(2048);
+
+		ImFont* m_lowDpiFont = nullptr;
+		ImFont* m_highDpiFont = nullptr;
 	};
 }

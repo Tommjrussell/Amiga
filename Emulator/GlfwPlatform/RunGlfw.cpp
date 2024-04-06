@@ -488,6 +488,8 @@ namespace guru
 		if (!renderer.Init(resDir, width, height))
 			return false;
 
+		app.Setup();
+
 		OpenAlPlayer audioPlayer;
 		audioPlayer.Setup();
 		app.SetAudioPlayer(&audioPlayer);

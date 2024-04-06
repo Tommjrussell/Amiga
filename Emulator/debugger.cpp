@@ -60,8 +60,10 @@ void guru::Debugger::Refresh()
 
 bool guru::Debugger::Draw()
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	bool open = true;
-	ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(40 * scale, 16 * scale), ImGuiCond_FirstUseEver);
 	bool expanded = ImGui::Begin("Debugger", &open);
 
 	if (!(open && expanded))
@@ -72,7 +74,7 @@ bool guru::Debugger::Draw()
 
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
-		ImGui::BeginChild("Child_Side", ImVec2(300, 0), true, 0);
+		ImGui::BeginChild("Child_Side", ImVec2(16 * scale, 0), true, 0);
 
 		DrawCpuRegisters();
 		DrawControls();
@@ -113,7 +115,7 @@ bool guru::Debugger::Draw()
 		flags |= ImGuiInputTextFlags_ReadOnly;
 	}
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(5 * scale);
 	if (ImGui::InputInt("Disassemble from addr", (int*)&m_disassemblyStart, 0, 0, flags))
 	{
 		m_disassembly.clear();
@@ -460,13 +462,16 @@ void guru::Debugger::DrawCpuRegisters()
 {
 	auto regs = m_amiga->GetCpu()->GetRegisters();
 
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-	ImGui::BeginChild("Child_Registers", ImVec2(0, 220.0f), true, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.4f * scale);
+
+	ImGui::BeginChild("Child_Registers", ImVec2(0, 9.6 * scale), true, 0);
 
 	ImGui::Columns(3, NULL, false);
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	for (int i = 0; i < 8; i++)
 	{
 		char buff[8];
@@ -486,7 +491,7 @@ void guru::Debugger::DrawCpuRegisters()
 
 	ImGui::NextColumn();
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	for (int i = 0; i < 8; i++)
 	{
 		char buff[8];
@@ -497,7 +502,7 @@ void guru::Debugger::DrawCpuRegisters()
 
 	ImGui::NextColumn();
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	const int pcDislayFlags = ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue;
 
 	if (ImGui::InputInt("pc", (int*)&regs.pc, 0, 0, pcDislayFlags))
@@ -546,7 +551,7 @@ void guru::Debugger::DrawCpuRegisters()
 	ImGui::Checkbox("Super", &supervisorMode);
 
 	ImGui::NextColumn();
-	ImGui::PushItemWidth(16);
+	ImGui::PushItemWidth(2 * scale);
 	int intMask = (regs.status & 0x0700) >> 8;
 	ImGui::InputInt("Int Mask", &intMask, 0, 0, ImGuiInputTextFlags_ReadOnly);
 	ImGui::PopItemWidth();
@@ -564,9 +569,10 @@ void guru::Debugger::DrawControls()
 {
 	using util::ActiveButton;
 
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-	ImGui::BeginChild("Controls", ImVec2(0, 150), true, 0);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.4f * scale);
+	ImGui::BeginChild("Controls", ImVec2(0, 6.6*scale), true, 0);
 
 	const bool running = m_app->IsRunning();
 	auto regs = m_amiga->GetCpu()->GetRegisters();
@@ -617,7 +623,7 @@ void guru::Debugger::DrawControls()
 	}
 
 	ImGui::SameLine();
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("##breakpoint", (int*)&m_breakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue);
 	ImGui::PopItemWidth();
 
@@ -634,7 +640,7 @@ void guru::Debugger::DrawControls()
 	}
 	ImGui::SameLine();
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	if (ImGui::InputInt("##registerBreakpoint", (int*)&m_regBreakpoint, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
 	{
 		if (m_breakOnRegister)
@@ -688,7 +694,7 @@ void guru::Debugger::DrawControls()
 			m_amiga->DisableDataBreakpoint();
 		}
 	}
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	if (ImGui::InputInt("##DataBreakpoint", (int*)&m_dataBp, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue))
 	{
 		m_dataBp &= ~((1 << m_dataBpSize) - 1);
@@ -837,6 +843,8 @@ void guru::Debugger::DrawDMA()
 
 void guru::Debugger::DrawCIAs()
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	static const char label[2] = { 'A', 'B' };
 	static const char* timerChildLabel[2][2] = {{ "CIAAtimerA", "CIAAtimerB" }, { "CIABtimerA", "CIABtimerB" }};
 	static const char* todLabel[2] = { "ciaa-tod", "ciab-tod" };
@@ -849,7 +857,7 @@ void guru::Debugger::DrawCIAs()
 	ImGui::Columns(2, NULL, false);
 
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.4f * scale);
 
 	for (int i = 0; i < 2; i++)
 	{
@@ -857,7 +865,7 @@ void guru::Debugger::DrawCIAs()
 
 		for (int j = 0; j < 2; j++)
 		{
-			ImGui::BeginChild(timerChildLabel[i][j], ImVec2(0, 64), true, 0);
+			ImGui::BeginChild(timerChildLabel[i][j], ImVec2(0, 2.9 * scale), true, 0);
 			ImGui::Text("Timer %c ", label[j]);
 			if (cia[i]->timer[j].continuous)
 			{
@@ -880,7 +888,7 @@ void guru::Debugger::DrawCIAs()
 
 		}
 
-		ImGui::BeginChild(todLabel[i], ImVec2(0, 84), true, 0);
+		ImGui::BeginChild(todLabel[i], ImVec2(0, 3.7 * scale), true, 0);
 		ImGui::Text("TOD ");
 		if (cia[i]->todRunning)
 		{
@@ -919,14 +927,15 @@ void guru::Debugger::DrawDiskDrives()
 {
 	ImGui::Columns(2, NULL, false);
 
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.4f * scale);
 
 	auto DrawDriveDetails = [&](int n)
 	{
 		char id[20];
 		sprintf_s(id, "DF%d", n);
-		ImGui::BeginChild(id, ImVec2(0, 80), true, 0);
+		ImGui::BeginChild(id, ImVec2(0, 3.7 * scale), true, 0);
 
 		auto& drive = m_amiga->GetFloppyDrive(n);
 

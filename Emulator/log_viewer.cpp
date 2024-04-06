@@ -12,8 +12,10 @@ guru::LogViewer::LogViewer(util::Log* log)
 
 bool guru::LogViewer::Draw()
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	bool open = true;
-	ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(32 * scale, 30 * scale), ImGuiCond_FirstUseEver);
 	bool expanded = ImGui::Begin("Log Viewer", &open);
 
 	if (!(open && expanded))
@@ -22,7 +24,7 @@ bool guru::LogViewer::Draw()
 		return open;
 	}
 
-	ImGui::BeginChild("##LogOptions", ImVec2(180, 0), true, 0);
+	ImGui::BeginChild("##LogOptions", ImVec2(8 * scale, 0), true, 0);
 
 	if (ImGui::Button("Clear Log"))
 	{
@@ -66,7 +68,7 @@ bool guru::LogViewer::Draw()
 		auto& messages = m_log->GetMessages();
 
 		ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
-		ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 96.0f);
+		ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, scale * 5.0f);
 		ImGui::TableSetupColumn("Message", ImGuiTableColumnFlags_None);
 		ImGui::TableHeadersRow();
 

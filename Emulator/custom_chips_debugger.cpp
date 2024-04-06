@@ -21,8 +21,10 @@ guru::CCDebugger::~CCDebugger()
 
 bool guru::CCDebugger::Draw()
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	bool open = true;
-	ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(36 * scale, 14 * scale), ImGuiCond_FirstUseEver);
 	bool expanded = ImGui::Begin("Custom Chips Debugger", &open);
 
 	if (!(open && expanded))
@@ -33,7 +35,7 @@ bool guru::CCDebugger::Draw()
 
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
-		ImGui::BeginChild("Child_Side", ImVec2(240, 0), true, 0);
+		ImGui::BeginChild("Child_Side", ImVec2(15 * scale, 0), true, 0);
 
 		if (ImGui::CollapsingHeader("Beam Info", ImGuiTreeNodeFlags_DefaultOpen))
 		{
@@ -68,6 +70,8 @@ bool guru::CCDebugger::Draw()
 
 void guru::CCDebugger::DrawBeamInfo()
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	ImGuiInputTextFlags beamValueflags = ImGuiInputTextFlags_ReadOnly;
 	if (m_beamValuesInHex)
 	{
@@ -82,7 +86,7 @@ void guru::CCDebugger::DrawBeamInfo()
 
 	ImGui::Text("Scan rate mode : %s", m_amiga->isNTSC() ? "NTSC" : "PAL");
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("Beam Pos H", &hpos, 0, 0, beamValueflags);
 	ImGui::InputInt("Beam Pos V", &vpos, 0, 0, beamValueflags);
 	ImGui::PopItemWidth();
@@ -114,6 +118,8 @@ void guru::CCDebugger::DrawColourPalette()
 
 void guru::CCDebugger::DrawBitplaneControl()
 {
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	const auto bplcon0 = m_amiga->PeekRegister(am::Register::BPLCON0);
 	const auto bplcon1 = m_amiga->PeekRegister(am::Register::BPLCON1);
 	const auto bplcon2 = m_amiga->PeekRegister(am::Register::BPLCON2);
@@ -152,7 +158,7 @@ void guru::CCDebugger::DrawBitplaneControl()
 
 	int pf1h = (bplcon1 & 0x000f);
 	int pf2h = (bplcon1 & 0x00f0) >> 4;
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("PF1H", &pf1h, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::InputInt("PF2H", &pf2h, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::PopItemWidth();
@@ -161,7 +167,7 @@ void guru::CCDebugger::DrawBitplaneControl()
 
 	int pf1p = (bplcon2 & 0x0007);
 	int pf2p = (bplcon2 & 0x0038) >> 3;
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("PF1P", &pf1p, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::InputInt("PF2P", &pf2p, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::PopItemWidth();
@@ -183,14 +189,14 @@ void guru::CCDebugger::DrawBitplaneControl()
 	auto startY = diwstrt >> 8;
 	auto stopY = ((~diwstop >> 7) & 0x0100) | (diwstop >> 8);
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("X Start", &startX, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::InputInt("X Stop", &stopX, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::PopItemWidth();
 
 	ImGui::NextColumn();
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("Y Start", &startY, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::InputInt("Y Stop", &stopY, 0, 0, ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::PopItemWidth();
@@ -217,13 +223,13 @@ void guru::CCDebugger::DrawCopper()
 {
 	using util::ActiveButton;
 
+	const auto scale = ImGui::GetFrameHeightWithSpacing();
+
 	auto& copper = m_amiga->GetCopper();
 	const bool running = m_app->IsRunning();
 
-	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-	ImGui::BeginChild("Copper_Controls", ImVec2(0, 104), true, 0);
-
-
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.4f * scale);
+	ImGui::BeginChild("Copper_Controls", ImVec2(0, 4.6 * scale), true, 0);
 
 	int cop1lc = uint32_t(m_amiga->PeekRegister(am::Register::COP1LCH)) << 16
 		| m_amiga->PeekRegister(am::Register::COP1LCL);
@@ -241,7 +247,7 @@ void guru::CCDebugger::DrawCopper()
 	}
 
 	{
-		ImGui::PushItemWidth(64);
+		ImGui::PushItemWidth(3 * scale);
 		int pc = copper.pc;
 		ImGui::InputInt("PC", &pc, 0, 0, ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_CharsHexadecimal);
 		ImGui::PopItemWidth();
@@ -249,7 +255,7 @@ void guru::CCDebugger::DrawCopper()
 
 	ImGui::NextColumn();
 
-	ImGui::PushItemWidth(64);
+	ImGui::PushItemWidth(3 * scale);
 	ImGui::InputInt("COP1LC", &cop1lc, 0, 0, ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::InputInt("COP2LC", &cop2lc, 0, 0, ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_CharsHexadecimal);
 	ImGui::PopItemWidth();
@@ -319,13 +325,13 @@ void guru::CCDebugger::DrawCopper()
 
 	ImGui::TextUnformatted("Disassemble from :");
 
-	ImGui::PushItemWidth(128);
+	ImGui::PushItemWidth(5 * scale);
 	ImGui::Combo("##SELECT", &m_disassembleMode, "PC\0COP1LC\0COP2LC\0Address\0");
 	ImGui::PopItemWidth();
 	if (m_disassembleMode == 3)
 	{
 		ImGui::SameLine();
-		ImGui::PushItemWidth(64);
+		ImGui::PushItemWidth(3 * scale);
 		ImGui::InputInt("##ADDR", (int*)&m_disassembleAddr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
 		ImGui::PopItemWidth();
 	}

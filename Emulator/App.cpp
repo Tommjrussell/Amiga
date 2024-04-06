@@ -396,6 +396,17 @@ guru::AmigaApp::AmigaApp(const std::filesystem::path& programDir, const std::fil
 	}
 }
 
+bool guru::AmigaApp::Setup()
+{
+	auto fontFile = m_programDir / "fonts" / "ProggyVector-Regular.ttf";
+
+	ImGuiIO& io = ImGui::GetIO();
+	m_lowDpiFont = io.Fonts->AddFontDefault();
+	m_highDpiFont = io.Fonts->AddFontFromFileTTF(fontFile.generic_string().c_str(), 22);
+
+	return true;
+}
+
 guru::AmigaApp::~AmigaApp()
 {
 }
@@ -493,6 +504,8 @@ bool guru::AmigaApp::Update()
 
 void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 {
+	ImGui::PushFont(m_feSettings.highDPI ? m_highDpiFont : m_lowDpiFont);
+
 	m_diskActivity->Draw(displayWidth, displayHeight);
 
 	if (m_inputMode == InputMode::EmulatorHasFocus)
@@ -581,6 +594,11 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 				m_feSettings.fullScreen = !m_feSettings.fullScreen;
 			}
 
+			if (ImGui::MenuItem("Toggle High DPI", "", m_feSettings.highDPI))
+			{
+				m_feSettings.highDPI = !m_feSettings.highDPI;
+			}
+
 			ImGui::EndMenu();
 		}
 
@@ -633,6 +651,8 @@ void guru::AmigaApp::Render(int displayWidth, int displayHeight)
 			m_logViewer.reset();
 		}
 	}
+
+	ImGui::PopFont();
 
 };
 
@@ -826,6 +846,14 @@ void guru::AmigaApp::LoadSettings()
 	}
 
 	{
+		auto uiSection = GetSection(ini, "UI");
+		if (auto useHighDpiFont = GetBoolKey(uiSection, "useHighDPIFont"))
+		{
+			m_feSettings.highDPI = useHighDpiFont.value();
+		}
+	}
+
+	{
 		auto displaySection = GetSection(ini, "Display");
 		if (auto useCrt = GetBoolKey(displaySection, "useCrt"))
 		{
@@ -872,6 +900,11 @@ void guru::AmigaApp::SaveSettings()
 	{
 		auto& systemSection = ini.m_sections["System"];
 		SetStringKey(systemSection, "rom", m_settings.romFile);
+	}
+
+	{
+		auto& uiSection = ini.m_sections["UI"];
+		SetBoolKey(uiSection, "useHighDPIFont", m_feSettings.highDPI);
 	}
 
 	{
